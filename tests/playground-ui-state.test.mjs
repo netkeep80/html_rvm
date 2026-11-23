@@ -20,7 +20,7 @@ test("UX P2-03: object key order is irrelevant, array order remains significant"
 });
 
 let fixtureNumber = 0;
-async function createMockBrowser() {
+async function createMockBrowser(buildInfo = null) {
   // DOM event harness: exercises the actual site/app.js handler wiring,
   // but is NOT a real Chromium responsive/visual test.
   const html = readFileSync(fileURLToPath(new URL("../site/index.html", import.meta.url)), "utf8");
@@ -87,7 +87,9 @@ async function createMockBrowser() {
     createElement: () => element(),
     body: { append() {} }
   };
-  globalThis.fetch = async () => ({ ok: false });
+  globalThis.fetch = async () => buildInfo === null
+    ? { ok: false }
+    : { ok: true, async json() { return buildInfo; } };
   globalThis.requestAnimationFrame = callback => callback();
   globalThis.setTimeout = () => 0;
   let exportedBlob = null;
@@ -184,4 +186,28 @@ test("UX P2-04/P3: quick +1 trace, invalid drafts and failed parse preserve live
     assert.equal(ui.$("snapshot-info").textContent.includes("#1"), true);
     assert.equal(JSON.parse(ui.$("working-editor").value).counter, 1);
   } finally { ui.restore(); }
+});
+
+test("VERS UI: renders exact build-info XX.YY in topbar and footer", async () => {
+  const commit = "f".repeat(40);
+  const ui = await createMockBrowser({ version: "01.04", commit, branch: "main", preview: true });
+  try {
+    assert.equal(ui.$("product-version").textContent, "Версия 01.04");
+    assert.equal(ui.$("build-version").textContent, "Версия 01.04 · HEAD ffffffffffff");
+    await ui.click("try-plus-one");
+    assert.equal(ui.$("product-version").textContent, "Версия 01.04");
+  } finally { ui.restore(); }
+});
+
+test("VERS UI: missing or invalid build metadata never shows a guessed version", async () => {
+  const missing = await createMockBrowser();
+  try {
+    assert.equal(missing.$("product-version").textContent, "Версия недоступна");
+    assert.equal(missing.$("build-version").textContent, "Версия недоступна");
+  } finally { missing.restore(); }
+  const invalid = await createMockBrowser({ version: "99", commit: "f".repeat(40), branch: "main" });
+  try {
+    assert.equal(invalid.$("product-version").textContent, "Версия недоступна");
+    assert.equal(invalid.$("build-version").textContent, "Версия недоступна");
+  } finally { invalid.restore(); }
 });

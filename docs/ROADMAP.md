@@ -29,6 +29,12 @@
 - Входной и рабочий черновики отличаются от активного snapshot/WorkingSession; неприменённый рабочий текст блокирует операции и экспорт. Видны конкретные before→after, активный snapshot и RAM lifetime.
 - Без полной Studio, новых UI-зависимостей, DBMS и изменения DocumentPort. Независимый браузерный повтор необходим перед UX acceptance.
 
+## VERS-001 — автоматическая версия XX.YY на GitHub Pages
+
+- [Issue #7](https://github.com/netkeep80/html_rvm/issues/7), [PR #8](https://github.com/netkeep80/html_rvm/pull/8): версия от архитектурного baseline PR #2, `01.00` и счётчик обычных двухродительских merge в main (после PR #10 `01.03`; следующий merge увеличивает YY).
+- [Полный протокол](VERSIONING.md): проверка точной Git-истории, отдельный `VERSION` artifact и видимая версия в шапке/футере сайта.
+- Pages workflow пересчитывает номер и публикует при **каждом** main push, даже docs-only. Версия — техническая метка сборки, а не свидетельство готовой VM или DBMS.
+
 ## S1B+ — Writer/интерпретатор [PLANNED]
 
 - Optional DocumentWriter с атомарным multi-document CAS/RFC6902 — отдельный проектный срез, без прямого DBMS API в VM.

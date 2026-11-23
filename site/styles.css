@@ -207,3 +207,19 @@ footer { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; marg
   .topbar-inner { gap: 6px; }
   .topbar-right { gap: 4px; }
 }
+
+/* Version badge remains visible even on the narrowest supported screens. */
+.pill-version {
+  color: #d7ebff;
+  background: #28446c;
+  border: 1px solid #5279ac;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+@media(max-width:580px) {
+  .topbar-right a { display: none; }
+}
+@media(max-width:340px) {
+  .topbar-right .pill-amber { display: none; }
+  .pill-version { padding: 6px 7px; font-size: 10px; }
+}
