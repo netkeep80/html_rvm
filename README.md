@@ -14,10 +14,11 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 
 ## Состояние
 
-- Автором **принята архитектура S0 и интерфейсный проект DocumentPort/1 (23.11.2026)**. Исполняемая VM и conformance tests пока отсутствуют; релиз не объявлен. [Точная приёмка и первоначальный RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md).
+- Автором **принята архитектура S0 и интерфейсный проект DocumentPort/1 (23.11.2026)**. Интерпретатор VM пока отсутствует; первый read-only MemoryProvider и тесты временного JSON создаются в [S1A Draft](docs/S1A-MEMORY.md) и не являются полным conformance или релизом. [Точная приёмка S0](docs/BOOTSTRAP-ACCEPTANCE.md).
 - Канонические нормативные требования — в каталоге requirements/*.rg.yaml. Остальные документы объясняют и иллюстрируют их, но не заменяют.
 - RepoGuard v6.0.1 подключается через immutable commit SHA; первый PR содержит bootstrap-требования и требует отдельной проверки первоначальной authority.
-- Нет принятого production приложения, готового VM, DBMS адаптера или доказанных контрактных тестов.
+- Нет принятого production приложения, готового интерпретатора VM или DBMS адаптера. S1A runtime-тесты охватывают только прямо указанный read-only и working JSON срез; полное соответствие DocumentPort/1 ещё не доказано.
+- Тестовая браузерная среда S1A («Счётчик», «Касса», инкремент и редактирование JSON) включена в **PR #5**; её workflow публикует GitHub Pages **только из main** после прохождения тестов. Это не интерпретатор МО и не production Studio.
 - Первый предполагаемый потребитель — обезличенная касса; второй — склад.
 
 ## Документы
@@ -28,6 +29,8 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 - [Roadmap, acceptance и gaps](docs/ROADMAP.md)
 - [TypeScript declaration (draft)](ports/document-port.d.ts)
 - [S0 — авторская приёмка и initial RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md)
+- [S1A — read-only MemoryProvider и временная рабочая JSON-модель (Draft)](docs/S1A-MEMORY.md)
+- [S1A JSON Lab — тестовая веб-среда GitHub Pages (Draft)](docs/S1A-PAGES.md)
 
 ## Основания
 

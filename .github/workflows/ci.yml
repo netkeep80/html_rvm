@@ -1,4 +1,4 @@
-name: HTML RVM — architecture bootstrap
+name: HTML RVM — S0 and S1A contract checks
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   structural:
-    name: Draft documents and boundary — structural checks
+    name: S0 structural and S1A runtime contract tests
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact source
@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "24"
-      - name: Structural and negative bootstrap tests (NOT runtime conformance)
+      - name: Run S0 structural + S1A read-only runtime tests (NOT full conformance)
         run: npm test
 
   repo-guard:
