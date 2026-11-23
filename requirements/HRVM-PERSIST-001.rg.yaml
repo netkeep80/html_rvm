@@ -1,0 +1,13 @@
+format: repo-guard/requirement-v1
+id: HRVM-PERSIST-001
+normative: "### HRVM-PERSIST-001 — Постоянное сохранение результата самоизменяющейся Модели Отношений MUST быть отдельной явно выраженной сущностью/намерением МО, формирующей нейтральный ChangeRequest с указанной исходной версией и выбранным состоянием/эффектом. Синтаксис такой сущности не должен зависеть от HTML DBMS, криптографических head или физического адреса. Само наличие или исполнение сущности MUST NOT предоставлять полномочия на запись: только доверенный host/ChangeGateway MAY разрешить отдельную DocumentWriter capability и выполнить commit. Отказ, отсутствие writer или конфликт MUST NOT изменять опубликованное состояние DBMS. Весь поток промежуточных рабочих модификаций MUST NOT автоматически включаться в физическую историю. Контракт DBMS и его криптографический протокол MUST оставаться независимыми от языка МО."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-WORK-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-WRITE-001 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ARCHITECTURE.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }
