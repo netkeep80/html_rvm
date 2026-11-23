@@ -5,3 +5,5 @@ lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/PRODUCT-VISION.md" }

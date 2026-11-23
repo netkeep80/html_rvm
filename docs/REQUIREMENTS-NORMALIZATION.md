@@ -19,9 +19,10 @@ Pinned RepoGuard v6.0.1 принимает в native Requirement только `f
 
 Для candidate IDs этого среза:
 - один ID выражает один независимо принимаемый и проверяемый инвариант;
-- normative содержит ровно один токен `MUST` и не использует `SHOULD/MAY`;
+- normative содержит ровно один токен `MUST` и не использует `SHOULD/MAY`; это **синтаксический guard**, а не доказательство семантической атомарности;
 - дополнительные пояснения могут уточнять границы этого же инварианта, но не добавлять вторую independently deployable обязанность;
-- разные моменты реализации/проверки => разные IDs.
+- разные моменты реализации/проверки => разные IDs;
+- семантическую атомарность окончательно подтверждает independent review: один `MUST` сам по себе не гарантирует один независимо проверяемый инвариант.
 
 Первый срез атомизирует legacy `PORT-001`, `WRITE-001`, `PERSIST-001`, `REF-001`, `TEST-001`. Остальные compound S0 Requirements остаются предметом следующих normalization slices.
 
@@ -31,7 +32,7 @@ Candidate graph добавляет уровень:
 
 `GOAL → USER → atomic requirement → artifact/test`.
 
-GOAL отвечает «зачем продукт существует», USER — «что пользователь/host должен иметь возможность сделать», atomic — один наблюдаемый/архитектурный инвариант. Для сохранения принятой authority atomic Requirements одновременно `derive_from` соответствующий legacy compound Requirement. Пока candidate не принят, он **не supersedes** accepted legacy Requirement.
+GOAL отвечает «зачем продукт существует», USER — «что пользователь/host должен иметь возможность сделать», atomic — один наблюдаемый/архитектурный инвариант. Source basis корневых целей фиксируется отдельно в [PRODUCT-VISION.md](PRODUCT-VISION.md) и ссылается на stakeholder-origin Issues/accepted S0 artifacts, не переворачивая иерархию derives_from. Для сохранения принятой authority atomic Requirements одновременно `derive_from` соответствующий legacy compound Requirement. Пока candidate не принят, он **не supersedes** accepted legacy Requirement.
 
 ## 5. verified_by
 

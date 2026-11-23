@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: HRVM-REF-IDENTITY-001
-normative: "### HRVM-REF-IDENTITY-001 — RVM resolver MUST разрешать стабильные логические entity IDs, JSON paths и контекстные ссылки независимо от конкретного storage provider."
+normative: "### HRVM-REF-IDENTITY-001 — RVM resolver MUST разрешать стабильные логические entity IDs независимо от конкретного storage provider."
 lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ derives_from ]

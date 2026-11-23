@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-CAP-001
-normative: "### HRVM-TEST-CAP-001 — Contract suite MUST исполняемо проверять, что отсутствие или отказ write capability не приводит к опубликованному persistent effect."
+normative: "### HRVM-TEST-CAP-001 — Contract suite MUST исполняемо проверять ограничения capability, предусмотренные соответствующим контрактом, включая недопустимость запрещённого эффекта без выданной capability."
 lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ derives_from ]

@@ -37,9 +37,9 @@ const normalizedCandidates = new Set([
   "HRVM-WRITE-FAIL-001","HRVM-WRITE-SCOPE-001",
   "HRVM-PERSIST-INTENT-001","HRVM-PERSIST-NEUTRAL-001","HRVM-PERSIST-AUTH-001",
   "HRVM-PERSIST-FAIL-001","HRVM-PERSIST-HISTORY-001","HRVM-PERSIST-DBMS-001",
-  "HRVM-REF-IDENTITY-001","HRVM-REF-READ-001","HRVM-REF-WORK-001",
-  "HRVM-REF-KINDS-001","HRVM-REF-DBMS-001","HRVM-REF-LIMIT-001",
-  "HRVM-TEST-READ-001","HRVM-TEST-WRITE-001","HRVM-TEST-CAP-001",
+  "HRVM-REF-IDENTITY-001","HRVM-REF-PATH-001","HRVM-REF-CONTEXT-001",
+  "HRVM-REF-READ-001","HRVM-REF-WORK-001","HRVM-REF-KINDS-001","HRVM-REF-DBMS-001","HRVM-REF-LIMIT-001",
+  "HRVM-TEST-POLARITY-001","HRVM-TEST-READ-001","HRVM-TEST-WRITE-001","HRVM-TEST-CAP-001",
   "HRVM-TEST-PARITY-001","HRVM-TEST-EVIDENCE-001","HRVM-TEST-MATRIX-001",
   "HRVM-TEST-WORK-001","HRVM-TEST-PERSIST-001",
   "HRVM-REQ-PRIORITY-001","HRVM-REQ-VERIFY-001",
@@ -47,7 +47,7 @@ const normalizedCandidates = new Set([
 ]);
 
 test("REQ-NORM: legacy accepted authority is preserved and normalized graph stays candidate", () => {
-  assert.equal(requirements.length, 59);
+  assert.equal(requirements.length, 62);
   for (const id of acceptedS0) {
     const r = byId.get(id);
     assert.ok(r, id);
@@ -55,7 +55,7 @@ test("REQ-NORM: legacy accepted authority is preserved and normalized graph stay
   }
   assert.match(byId.get("HRVM-VERSION-001").text,
     /lifecycle: \{ accepted: false, current: false, published: false \}/);
-  assert.equal(normalizedCandidates.size, 42);
+  assert.equal(normalizedCandidates.size, 45);
   for (const id of normalizedCandidates) {
     const r = byId.get(id);
     assert.ok(r, "missing normalized candidate " + id);
@@ -118,10 +118,7 @@ test("REQ-NORM: verified_by is deliberately sparse in candidate atomics, never a
     ["HRVM-PORT-READER-001","tests/bootstrap-contract.test.mjs"],
     ["HRVM-PORT-WRITER-001","tests/bootstrap-contract.test.mjs"],
     ["HRVM-PORT-BOUNDARY-001","tests/bootstrap-contract.test.mjs"],
-    ["HRVM-REQ-PRIORITY-001","tests/requirements-normalization.test.mjs"],
-    ["HRVM-REQ-VERIFY-001","tests/requirements-normalization.test.mjs"],
-    ["HRVM-REQ-GLOSSARY-001","tests/requirements-normalization.test.mjs"],
-    ["HRVM-REQ-AUDIT-001","tests/requirements-normalization.test.mjs"]
+    ["HRVM-REQ-PRIORITY-001","tests/requirements-normalization.test.mjs"]
   ]);
   for (const id of normalizedCandidates) {
     const text = byId.get(id).text;
@@ -151,4 +148,40 @@ test("REQ-NORM: method records Wiegers-style quality gate and non-automatic acce
   assert.match(doc, /не меняет authority/);
   assert.match(doc, /не supersedes/);
   assert.match(doc, /Нельзя выводить acceptance из CI\/merge/);
+});
+
+
+test("REQ-NORM audit delta: semantic-preservation regressions stay closed", () => {
+  assert.doesNotMatch(byId.get("HRVM-PORT-READER-001").normative, /объявлять только операции/);
+  assert.match(byId.get("HRVM-WRITE-ATOMIC-001").normative, /к существующим документам/);
+  assert.match(byId.get("HRVM-REF-CONTEXT-001").normative, /\$ent/);
+  assert.match(byId.get("HRVM-REF-CONTEXT-001").normative, /\$sub/);
+  assert.match(byId.get("HRVM-REF-CONTEXT-001").normative, /\$rel/);
+  assert.match(byId.get("HRVM-REF-CONTEXT-001").normative, /\$obj/);
+  assert.match(byId.get("HRVM-REF-CONTEXT-001").normative, /родительские контексты/);
+  assert.match(byId.get("HRVM-REF-LIMIT-001").normative, /циклы/);
+  assert.match(byId.get("HRVM-REF-LIMIT-001").normative, /чрезмерную глубину/);
+  assert.doesNotMatch(byId.get("HRVM-REF-LIMIT-001").normative, /RESOURCE_LIMIT/);
+  assert.match(byId.get("HRVM-TEST-POLARITY-001").normative, /позитивные и негативные/);
+  assert.match(byId.get("HRVM-TEST-CAP-001").normative, /ограничения capability/);
+  assert.doesNotMatch(byId.get("HRVM-TEST-PERSIST-001").normative, /нейтральн/);
+  for (const id of ["HRVM-REQ-AUDIT-001","HRVM-REQ-GLOSSARY-001","HRVM-REQ-VERIFY-001"]) {
+    assert.doesNotMatch(byId.get(id).text, /predicates: \[ verified_by \]/, id);
+  }
+});
+
+test("REQ-NORM: one-MUST check is explicitly only a syntactic guard", () => {
+  const doc = read("docs/REQUIREMENTS-NORMALIZATION.md");
+  assert.match(doc, /синтаксический guard/);
+  assert.match(doc, /один `MUST` сам по себе не гарантирует/);
+});
+
+test("REQ-NORM: root GOALs have explicit stakeholder/source-backing artifact", () => {
+  const vision = read("docs/PRODUCT-VISION.md");
+  assert.match(vision, /Issue #1 — BOOT-001/);
+  assert.match(vision, /Issue #3 — S1-RESEARCH/);
+  assert.match(vision, /BOOTSTRAP-ACCEPTANCE\.md/);
+  for (const id of ["HRVM-GOAL-001","HRVM-GOAL-002","HRVM-GOAL-003"]) {
+    assert.match(byId.get(id).text, /docs\/PRODUCT-VISION\.md/, id);
+  }
 });

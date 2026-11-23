@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: HRVM-REF-LIMIT-001
-normative: "### HRVM-REF-LIMIT-001 — Resolver MUST завершать циклическую адресацию или превышение настроенного finite resource bound машинной ошибкой RESOURCE_LIMIT вместо неограниченного обхода."
+normative: "### HRVM-REF-LIMIT-001 — Resolver MUST обрабатывать циклы и чрезмерную глубину разрешения ссылок с конечным ограничением ресурсов, исключающим неограниченный обход."
 lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ derives_from ]

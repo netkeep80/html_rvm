@@ -1,6 +1,6 @@
 format: repo-guard/requirement-v1
 id: HRVM-PORT-READER-001
-normative: "### HRVM-PORT-READER-001 — DocumentPort/1 MUST объявлять только операции DocumentReader.openSnapshot(reference?) и DocumentReader.read(snapshot, documentId) для чтения документов."
+normative: "### HRVM-PORT-READER-001 — DocumentPort/1 MUST объявлять операции DocumentReader.openSnapshot(reference?) и DocumentReader.read(snapshot, documentId) для чтения документов."
 lifecycle: { accepted: false, current: false, published: false }
 relations:
   - predicates: [ derives_from ]
