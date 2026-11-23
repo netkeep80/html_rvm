@@ -9,3 +9,6 @@ relations:
     target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/ROADMAP.md" }
+
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/S1A-MEMORY.md" }

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Draft contracts and structural witnesses; RVM runtime not implemented",
+  "description": "Accepted S0 contracts plus S1A read-only memory provider and ephemeral JSON session; RVM interpreter not implemented",
   "scripts": {
     "test": "node --test tests/*.test.mjs"
   },

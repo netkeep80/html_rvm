@@ -15,11 +15,17 @@
 
 Исходные документы восстанавливаются из неизменяемого snapshot через провайдер, затем HTML RVM исполняет и самомодифицирует **временную рабочую JSON-модель в памяти**. Частые изменения рабочих значений (включая высокочастотные циклы) не приводят к физическим append/commit в DBMS. Только явная сущность сохранения МО может сформировать нейтральный ChangeRequest, исполняемый при отдельном разрешении trusted host/ChangeGateway. Схема этой сущности остаётся решением S2. Проверить C20–C26; не считать их пройденными в BOOT-001.
 
-## S1 — DocumentPort/1 MemoryProvider [PLANNED]
+## S1A — MemoryDocumentProvider read-only + Working JSON [DRAFT / NOT_ACCEPTED]
 
-- Независимый reader, immutable snapshot, deep copy, typed errors.
-- Optional writer с атомарными multi-document changes, optimistic conflict.
-- Положительные и отрицательные тесты C01–C09 и C16–C18 (чужие/поддельные handles, iframe/Worker и строгий JSON-домен); никакой DBMS в транзитивных зависимостях.
+- Один узкий implementation PR по [Issue #4](https://github.com/netkeep80/html_rvm/issues/4), в развитие принятых направлений [Issue #3](https://github.com/netkeep80/html_rvm/issues/3). [Точная граница S1A](S1A-MEMORY.md).
+- Независимый только read-only DocumentReader, immutable snapshot, runtime-проверка handle по provider instance, strict JSON clone, typed errors.
+- Отдельный mutable JSON в каждом working session, ноль скрытых вызовов writer; тесты C01–C03/C08/C09/C16/C18/C20/C25 в применимой части. C17/C21/C22 лишь частично; проверка миллиона инкрементов НЕ измеряет throughput VM.
+- Не считать реализацию read-only провайдера доказательством полной совместимости DocumentPort/1.
+
+## S1B+ — Writer/интерпретатор [PLANNED]
+
+- Optional DocumentWriter с атомарным multi-document CAS/RFC6902 — отдельный проектный срез, без прямого DBMS API в VM.
+- Самостоятельные тесты C04–C07, C17 iframe/Worker, границы строгого JSON при commit.
 
 ## S2 — HTML RVM VM [PLANNED]
 

@@ -7,3 +7,14 @@ relations:
     target: { kind: requirement, id: HRVM-PORT-001 }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }
+
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "src/memory-document-provider.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "src/strict-json.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "src/document-port-error.js" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/memory-document-provider.test.mjs" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/S1A-MEMORY.md" }
