@@ -136,7 +136,7 @@ test("REQ-NORM: glossary defines every ambiguity class called out by audit", () 
     "verified snapshot","PersistenceIntent","ChangeRequest","alias normalization",
     "resource bound","current main snapshot/head","capability","verified_by"
   ]) assert.ok(glossary.includes("**" + term + "**"), "missing glossary term " + term);
-  assert.match(glossary, /RESOURCE_LIMIT/);
+  assert.match(glossary, /конкретный machine error code задаётся отдельным требованием/);
 });
 
 test("REQ-NORM: method records Wiegers-style quality gate and non-automatic acceptance", () => {
