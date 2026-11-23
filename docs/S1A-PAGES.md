@@ -1,20 +1,20 @@
 # S1A Playground — требования и ручная проверка на GitHub Pages
 
-Статус: **DRAFT / PREVIEW / NOT_AUTHOR_ACCEPTED / NOT_RELEASED**. Часть [Issue #4](https://github.com/netkeep80/html_rvm/issues/4) и [Draft PR #5](https://github.com/netkeep80/html_rvm/pull/5). Автор выбрал **GitHub Pages → GitHub Actions** и попросил предоставить интерфейс в том же PR до принятия. Эта страница **не является** интерпретатором МО, HTML DBMS или готовой Studio.
+Статус: **S1A TEST LAB / AUTHOR-AUTHORIZED MERGE AND MAIN PUBLICATION (2026-11-23) / NOT VM RELEASE**. Часть [Issue #4](https://github.com/netkeep80/html_rvm/issues/4) и [PR #5](https://github.com/netkeep80/html_rvm/pull/5). Автор сначала разрешил Pages через GitHub Actions, затем прямо распорядился **объединить PR и публиковать только из main**. Фактический merge и публикация фиксируются отдельно по подтверждённым SHA и workflow. Страница **не является** интерпретатором МО, HTML DBMS или production Studio. Независимый read-only аудит полной реализации на финальном SHA отдельно не представлен; это известный governance gap, а не воображаемый PASS.
 
 ## Доступ и развёртывание
 
-После **фактически успешного** Pages workflow из ветки `feat/s1a-memory-working-json` ожидаемый адрес проекта:
+После **фактически успешного** Pages workflow, запущенного только с `main`, адрес проекта:
 https://netkeep80.github.io/html_rvm/site/
 
 Корень сайта содержит только безопасную ссылку-перенаправление на `./site/`. Перед передачей пользователю проверять **реальный** результат GitHub Actions, а не считать опубликованным из-за наличия YAML.
 
 Workflow `.github/workflows/pages-preview.yml`:
-- `push` **только** в `feat/s1a-memory-working-json` и `workflow_dispatch`, дополнительное `if` ограничивает branch и jobs.
+- `push` **только** в `main` и `workflow_dispatch`; дополнительные `if` запрещают jobs с других веток. При слиянии PR обычный push в main запускает тесты и затем деплой.
 - Сначала `npm test` и детерминированная сборка `tools/build-pages.mjs`; затем `upload-pages-artifact`, `configure-pages` и `deploy-pages`.
-- Pages-доступ только у job `deploy` (`pages:write, id-token:write`); checkout `persist-credentials:false`, pin на immutable SHA; нет commit в `main`.
+- Pages-доступ только у job `deploy` (`pages:write, id-token:write`); checkout `persist-credentials:false`, все Actions pinned immutable SHA. Workflow сам не создаёт commit и не изменяет main.
 - В публикацию попадают только 8 проверенных HTML/CSS/JS-файлов и 2 служебных статических файла: root redirect + `build-info.json` с точным commit. Никаких пользовательских данных, документов, GitHub secrets или файлов репозитория вне белого списка.
-- Если ограничения `github-pages` Environment запрещают публикацию из этой feature-ветки, ничего не обходить и честно сообщить BLOCK.
+- Публикация из `feat/s1a-memory-working-json` не производится. Если Environment `github-pages` блокирует даже `main`, ничего не обходить и честно сообщить BLOCK.
 
 ## Сценарии интерфейса
 
@@ -31,7 +31,7 @@ Workflow `.github/workflows/pages-preview.yml`:
 - Никаких `localStorage`, `IndexedDB`, cookies, service workers, implicit save, `eval()`, выполнения пользовательского JS и подстановки содержимого JSON в HTML-разметку.
 - `source` — только экземпляр read-only MemoryProvider; `working` — mutable session. UI JSON Pointer НЕ расширяет DocumentPort/1, по-прежнему whole-document `read(snapshot, documentId)`.
 - Вкладка и память страницы исчезают при перезагрузке. Экспорт файла — отдельное явное действие в браузере; он не является HTML DBMS commit.
-- Статус «DRAFT · PR #5» и точный короткий SHA видны в интерфейсе; `published=false` канонических требований **не меняется**, публикация тестового стенда не есть релиз VM.
+- Статус «S1A · TEST LAB» и точный короткий SHA видны в интерфейсе; `published=false` канонических требований **не меняется**, публикация тестового стенда не есть релиз VM.
 
 ## Проверки перед авторской приёмкой
 
@@ -39,6 +39,6 @@ Workflow `.github/workflows/pages-preview.yml`:
 - `tests/playground-pages.test.mjs`: наличие UI-контролов, отсутствие запрещённых сторонних JS/imports, сборка точного artifact, связь относительных путей и pin GitHub Actions.
 - Сохранить все 20 прежних S0/S1A тестов зелёными; проверить RepoGuard exact BASE/HEAD и отсутствия новых диагностик. Успешная сборка статического сайта — **не замена** ручному тестированию в браузере.
 - Ручные шаги: открыть ссылку → «Увеличить» → проверить, что source не меняется → «Проверить изоляцию» → «1 000 000 изменений» → «Сброс» → «Касса» и «Создать снимок» → путь `/balance` → установить `null` и увидеть ожидаемую ошибку при числовом инкременте → экспорт локального JSON.
-- Независимый READ-ONLY аудит новой delta (UI + workflow + tests) по точному SHA, затем отдельная авторская приёмка. **Никакого merge PR #5 без решения автора**.
+- Автор явно разрешил merge PR #5 и публикацию с main 23.11.2026. Отсутствие отдельного независимого READ-ONLY аудита финальной delta надо оставить открытым как evidence gap и провести post-merge аудит; не объявлять CI эквивалентом независимого аудита.
 
 Применимость: ручной тестовый стенд S1A, не полноценная МО и не проверка криптографической целостности HTML DBMS.

@@ -13,7 +13,7 @@ const file = relative => readFileSync(resolve(root, relative), "utf8");
 test("Pages preview is static, labelled DRAFT and uses relative assets", () => {
   const html = file("site/index.html");
   assert.match(html, /lang="ru"/);
-  assert.match(html, /DRAFT · PR #5/);
+  assert.match(html, /S1A · TEST LAB/);
   assert.match(html, /href="\.\/styles\.css"/);
   assert.match(html, /src="\.\/app\.js"/);
   for (const id of [
@@ -44,12 +44,12 @@ test("Pages artifact includes all modules, exact version marker and root redirec
   try {
     const out = join(temp, "dist");
     const commit = "a".repeat(40);
-    const result = buildPages(out, { commit, branch: "feat/s1a-memory-working-json" });
+    const result = buildPages(out, { commit, branch: "main" });
     assert.equal(result.files.length, 10);
     for (const relative of result.files) assert.equal(existsSync(join(out, relative)), true, relative);
     assert.match(readFileSync(join(out, "index.html"), "utf8"), /url=\.\/site\//);
     const meta = JSON.parse(readFileSync(join(out, "site/build-info.json"), "utf8"));
-    assert.deepStrictEqual(meta, { commit, branch: "feat/s1a-memory-working-json", preview: true });
+    assert.deepStrictEqual(meta, { commit, branch: "main", preview: true });
     assert.equal(readFileSync(join(out, "site/app.js"), "utf8"), file("site/app.js"));
     assert.equal(readFileSync(join(out, "src/working-session.js"), "utf8"), file("src/working-session.js"));
   } finally {
@@ -57,10 +57,10 @@ test("Pages artifact includes all modules, exact version marker and root redirec
   }
 });
 
-test("Pages workflow deploys feature branch only after tests and uses pinned actions", () => {
+test("Pages workflow deploys main only after tests and uses pinned actions", () => {
   const workflow = file(".github/workflows/pages-preview.yml");
-  assert.match(workflow, /branches: \[feat\/s1a-memory-working-json\]/);
-  assert.match(workflow, /if: github\.ref == 'refs\/heads\/feat\/s1a-memory-working-json'/);
+  assert.match(workflow, /branches: \[main\]/);
+  assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /needs: test-build/);
   assert.match(workflow, /environment:\s*\n\s+name: github-pages/);
   assert.match(workflow, /pages: write/);

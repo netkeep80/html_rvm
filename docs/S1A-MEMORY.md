@@ -1,6 +1,6 @@
 # S1A — read-only MemoryDocumentProvider и Working JSON
 
-**Статус: Draft PR / NOT_AUTHOR_ACCEPTED / NOT_MERGED.** Это ограниченная исполняемая часть принятой S0-архитектуры. Интерпретатор МО, Writer и DBMS adapter не реализованы.
+**Статус: S1A implementation review candidate; author authorized merge to publish JSON Lab from main (2026-11-23).** Это ограниченная исполняемая часть принятой S0-архитектуры. Интерпретатор МО, Writer и DBMS adapter не реализованы.
 
 Основания: [Issue #3 — принятый сравнительный анализ](https://github.com/netkeep80/html_rvm/issues/3), [Issue #4 — исполнительный срез](https://github.com/netkeep80/html_rvm/issues/4).
 

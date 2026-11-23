@@ -1,8 +1,8 @@
-name: HTML RVM S1A — Pages preview
+name: HTML RVM S1A — Pages from main
 
 on:
   push:
-    branches: [feat/s1a-memory-working-json]
+    branches: [main]
     paths:
       - "site/**"
       - "src/**"
@@ -17,13 +17,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: html-rvm-pages-preview
+  group: html-rvm-pages-main
   cancel-in-progress: true
 
 jobs:
   test-build:
     name: Validate and package static preview
-    if: github.ref == 'refs/heads/feat/s1a-memory-working-json'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -47,8 +47,8 @@ jobs:
           path: dist
 
   deploy:
-    name: Publish draft S1A Playground to GitHub Pages
-    if: github.ref == 'refs/heads/feat/s1a-memory-working-json'
+    name: Publish HTML RVM JSON Lab from main
+    if: github.ref == 'refs/heads/main'
     needs: test-build
     runs-on: ubuntu-24.04
     permissions:
