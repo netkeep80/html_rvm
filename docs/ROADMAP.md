@@ -20,6 +20,7 @@
 - Один узкий implementation PR по [Issue #4](https://github.com/netkeep80/html_rvm/issues/4), в развитие принятых направлений [Issue #3](https://github.com/netkeep80/html_rvm/issues/3). [Точная граница S1A](S1A-MEMORY.md).
 - Независимый только read-only DocumentReader, immutable snapshot, runtime-проверка handle по provider instance, strict JSON clone, typed errors.
 - Отдельный mutable JSON в каждом working session, ноль скрытых вызовов writer; тесты C01–C03/C08/C09/C16/C18/C20/C25 в применимой части. C17/C21/C22 лишь частично; проверка миллиона инкрементов НЕ измеряет throughput VM.
+- [Тестовый JSON Lab на GitHub Pages](S1A-PAGES.md) — в том же Draft PR #5, без VM/DBMS: загрузка исходного JSON, отдельное рабочее состояние, ручные операции, миллион инкрементов, проверка изоляции и явный экспорт. GitHub Pages Source=Actions автор настроил самостоятельно. Публикация preview ≠ merge/acceptance.
 - Не считать реализацию read-only провайдера доказательством полной совместимости DocumentPort/1.
 
 ## S1B+ — Writer/интерпретатор [PLANNED]

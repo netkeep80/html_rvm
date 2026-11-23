@@ -18,3 +18,5 @@ relations:
     target: { kind: artifact, path: "tests/working-session.test.mjs" }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/S1A-MEMORY.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/S1A-PAGES.md" }

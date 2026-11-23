@@ -1,0 +1,80 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { buildPages } from "../tools/build-pages.mjs";
+
+const root = fileURLToPath(new URL("../", import.meta.url));
+const file = relative => readFileSync(resolve(root, relative), "utf8");
+
+test("Pages preview is static, labelled DRAFT and uses relative assets", () => {
+  const html = file("site/index.html");
+  assert.match(html, /lang="ru"/);
+  assert.match(html, /DRAFT · PR #5/);
+  assert.match(html, /href="\.\/styles\.css"/);
+  assert.match(html, /src="\.\/app\.js"/);
+  for (const id of [
+    "source-editor", "working-editor", "create-snapshot", "apply-working",
+    "reset-working", "increment", "stress", "set-value",
+    "delete-value", "verify", "export-working", "status-line"
+  ]) assert.match(html, new RegExp('id="' + id + '"'));
+  assert.doesNotMatch(html, /<script[^>]+src="https?:\/\//i);
+});
+
+test("Pages controller does not import DBMS, exec user JS or silently persist", () => {
+  const app = file("site/app.js");
+  const ops = file("site/operations.js");
+  assert.match(app, /\.\.\/src\/memory-document-provider\.js/);
+  assert.match(app, /\.\.\/src\/working-session\.js/);
+  assert.match(ops, /\.\.\/src\/strict-json\.js/);
+  for (const content of [app, ops]) {
+    assert.doesNotMatch(content, /\b(?:eval|localStorage|sessionStorage|indexedDB)\s*\(/);
+    assert.doesNotMatch(content, /(?:from|import)\s*\(?\s*["'][^"']*(?:html_dbms|html-dbms)/i);
+    assert.doesNotMatch(content, /\.innerHTML\s*=/);
+  }
+  assert.match(app, /downloadJSON\(\)/);
+  assert.match(app, /createWorkingSession\(/);
+});
+
+test("Pages artifact includes all modules, exact version marker and root redirect", () => {
+  const temp = mkdtempSync(join(tmpdir(), "rvm-pages-"));
+  try {
+    const out = join(temp, "dist");
+    const commit = "a".repeat(40);
+    const result = buildPages(out, { commit, branch: "feat/s1a-memory-working-json" });
+    assert.equal(result.files.length, 10);
+    for (const relative of result.files) assert.equal(existsSync(join(out, relative)), true, relative);
+    assert.match(readFileSync(join(out, "index.html"), "utf8"), /url=\.\/site\//);
+    const meta = JSON.parse(readFileSync(join(out, "site/build-info.json"), "utf8"));
+    assert.deepStrictEqual(meta, { commit, branch: "feat/s1a-memory-working-json", preview: true });
+    assert.equal(readFileSync(join(out, "site/app.js"), "utf8"), file("site/app.js"));
+    assert.equal(readFileSync(join(out, "src/working-session.js"), "utf8"), file("src/working-session.js"));
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("Pages workflow deploys feature branch only after tests and uses pinned actions", () => {
+  const workflow = file(".github/workflows/pages-preview.yml");
+  assert.match(workflow, /branches: \[feat\/s1a-memory-working-json\]/);
+  assert.match(workflow, /if: github\.ref == 'refs\/heads\/feat\/s1a-memory-working-json'/);
+  assert.match(workflow, /needs: test-build/);
+  assert.match(workflow, /environment:\s*\n\s+name: github-pages/);
+  assert.match(workflow, /pages: write/);
+  assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /actions\/deploy-pages@[a-f0-9]{40}/);
+  assert.match(workflow, /actions\/upload-pages-artifact@[a-f0-9]{40}/);
+  assert.match(workflow, /actions\/configure-pages@[a-f0-9]{40}/);
+  assert.match(workflow, /node tools\/build-pages\.mjs/);
+  assert.match(workflow, /npm test/);
+});
+
+test("Browser JS parses as native modules without npm dependencies", () => {
+  for (const path of [
+    "site/app.js", "site/operations.js", "src/memory-document-provider.js",
+    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs"
+  ]) assert.doesNotThrow(() => execFileSync(process.execPath, ["--check", resolve(root, path)]));
+});

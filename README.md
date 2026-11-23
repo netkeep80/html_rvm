@@ -18,6 +18,7 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 - Канонические нормативные требования — в каталоге requirements/*.rg.yaml. Остальные документы объясняют и иллюстрируют их, но не заменяют.
 - RepoGuard v6.0.1 подключается через immutable commit SHA; первый PR содержит bootstrap-требования и требует отдельной проверки первоначальной authority.
 - Нет принятого production приложения, готового интерпретатора VM или DBMS адаптера. S1A runtime-тесты охватывают только прямо указанный read-only и working JSON срез; полное соответствие DocumentPort/1 ещё не доказано.
+- Тестовая браузерная среда S1A («Счётчик», «Касса», инкремент и редактирование JSON) разрабатывается в **том же Draft PR #5**; это не интерпретатор МО и не production Studio.
 - Первый предполагаемый потребитель — обезличенная касса; второй — склад.
 
 ## Документы
@@ -29,6 +30,7 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 - [TypeScript declaration (draft)](ports/document-port.d.ts)
 - [S0 — авторская приёмка и initial RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md)
 - [S1A — read-only MemoryProvider и временная рабочая JSON-модель (Draft)](docs/S1A-MEMORY.md)
+- [S1A JSON Lab — тестовая веб-среда GitHub Pages (Draft)](docs/S1A-PAGES.md)
 
 ## Основания
 
