@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-TEST-PARITY-001
+normative: "### HRVM-TEST-PARITY-001 — До заявления о provider parity contract suite MUST исполнять одинаковый логический сценарий на Memory и DBMS providers и сравнивать наблюдаемую семантику."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-004 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-TEST-PERSIST-001
+normative: "### HRVM-TEST-PERSIST-001 — Contract suite MUST исполняемо проверять, что постоянное сохранение результата исполнения происходит только при явно авторизованном PersistenceIntent."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-003 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

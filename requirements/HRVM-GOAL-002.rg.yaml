@@ -1,0 +1,9 @@
+format: repo-guard/requirement-v1
+id: HRVM-GOAL-002
+normative: "### HRVM-GOAL-002 — HTML RVM MUST позволять экспериментировать с самоизменяющимся рабочим JSON без неявной постоянной записи промежуточных состояний."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/PRODUCT-VISION.md" }

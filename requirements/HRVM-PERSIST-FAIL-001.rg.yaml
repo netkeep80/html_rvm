@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-PERSIST-FAIL-001
+normative: "### HRVM-PERSIST-FAIL-001 — Отклонённый PersistenceIntent, отсутствие writer или conflict MUST оставлять опубликованное persistent state неизменным."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PERSIST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-003 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

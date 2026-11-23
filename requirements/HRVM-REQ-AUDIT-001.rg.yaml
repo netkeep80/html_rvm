@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-REQ-AUDIT-001
+normative: "### HRVM-REQ-AUDIT-001 — Candidate Requirement normalization MUST пройти независимую проверку complete/correct/feasible/necessary/prioritized/unambiguous/verifiable и set-level complete/consistent/modifiable/traceable до authority migration."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "requirements/metadata/legacy-to-atomic.json" }

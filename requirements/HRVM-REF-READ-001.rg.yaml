@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-REF-READ-001
+normative: "### HRVM-REF-READ-001 — Разрешение ссылки для чтения MUST оставлять immutable snapshot/document provider без наблюдаемого изменения."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-REF-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-001 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

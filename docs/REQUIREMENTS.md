@@ -2,7 +2,7 @@
 
 Единственный нормативный источник: versioned requirements/*.rg.yaml в формате repo-guard/requirement-v1. Тексты в README, документах и Issues — объяснения, но не вторые нормативные требования.
 
-Система IDs: HRVM-PRODUCT-000, HRVM-PROJECT-000, HRVM-ARCH-001, HRVM-PORT-001, HRVM-SNAP-001, HRVM-READ-001, HRVM-WRITE-001, HRVM-REF-001, HRVM-ADAPT-001, HRVM-SEC-001, HRVM-TEST-001, HRVM-CASE-001, HRVM-LICENSE-001, HRVM-BOOT-001, HRVM-WORK-001, HRVM-PERSIST-001.
+Изначальный S0 baseline использует IDs HRVM-PRODUCT-000, HRVM-PROJECT-000, HRVM-ARCH-001, HRVM-PORT-001, HRVM-SNAP-001, HRVM-READ-001, HRVM-WRITE-001, HRVM-REF-001, HRVM-ADAPT-001, HRVM-SEC-001, HRVM-TEST-001, HRVM-CASE-001, HRVM-LICENSE-001, HRVM-BOOT-001, HRVM-WORK-001, HRVM-PERSIST-001. Срез REQ-NORM-001 добавляет **непринятый параллельный candidate graph** с многочастными IDs вида `HRVM-PORT-READER-001`; это не меняет authority старых требований до отдельной миграционной приёмки.
 
 Иерархия: PRODUCT — корневая предметная цель. PROJECT — дисциплина управления; ARCH — независимость систем; PORT — минимальный интерфейс; SNAP/READ/WRITE — его наблюдаемая семантика; REF — семантика RVM; ADAPT — DBMS интеграция; SEC — граница доверия; TEST — свидетели; CASE — применение на обезличенной кассе и складе; LICENSE — самостоятельная лицензия распространения; BOOT — проверяемые структурные границы начальной спецификации, не проверка всей дисциплины governance; WORK — временная самомодифицируемая JSON-модель, изолированная от immutable provider snapshot; PERSIST — явная сущность сохранения МО, не являющаяся непосредственным DBMS commit.
 
@@ -10,7 +10,9 @@
 
 Статус всех 16 требований первоначального baseline: **accepted=true, current=true, published=false**. Это означает принятие нормативной архитектуры, но НЕ реализованный VM runtime, НЕ подтверждение C01–C26 и НЕ выпуск релиза. Merge сам по себе не меняет `published`.
 
-Требования описывают наблюдаемый результат и границу полномочий, не предписывают ненужную реализацию или полную файловую систему. Отношения документов/реализации связывают конкретные tracked Resources; verified_by используется только при наличии исполняемого теста соответствующего утверждения.
+Требования описывают наблюдаемый результат и границу полномочий, не предписывают ненужную реализацию или полную файловую систему. Отношения документов/реализации связывают конкретные tracked Resources; `verified_by` используется только при наличии исполняемого свидетельства **всего** соответствующего атомарного утверждения в заявленном scope. Частичная проверка темы не является `verified_by`.
+
+По независимому requirements-engineering аудиту введён normalization slice [REQ-NORM-001](REQUIREMENTS-NORMALIZATION.md): уровень GOAL → USER → atomic requirement, [канонический glossary](GLOSSARY.md), versioned [priority-map](../requirements/metadata/priority-map.json) и mapping legacy→atomic. Pinned RepoGuard v6.0.1 не допускает произвольное top-level поле `priority` в native Requirement, поэтому приоритет хранится в проверяемом sidecar вместо невалидного расширения формата.
 
 Критерии приёмки изложены в docs/DOCUMENT-PORT-1.md (C01–C26). До реализации это план испытаний, а не доказательство. Точное различение planned / implemented / tested обязательно.
 
