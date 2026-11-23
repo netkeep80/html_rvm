@@ -159,10 +159,19 @@ async function setBuildInfo() {
     const response = await fetch("./build-info.json", { cache: "no-store" });
     if (!response.ok) return;
     const info = await response.json();
-    if (typeof info.commit === "string" && /^[0-9a-f]{40}$/.test(info.commit)) {
-      $("build-version").textContent = "HEAD " + info.commit.slice(0, 12);
+    if (typeof info.commit === "string" && /^[0-9a-f]{40}$/.test(info.commit) &&
+        typeof info.version === "string" && /^[0-9]{2}\.[0-9]{2}$/.test(info.version) &&
+        !info.version.startsWith("00.")) {
+      $("product-version").textContent = "v" + info.version;
+      $("build-version").textContent = "Версия " + info.version + " · HEAD " + info.commit.slice(0, 12);
+      return;
     }
-  } catch { /* local server without build metadata */ }
+    throw Error("Invalid versioned build metadata");
+  } catch {
+    // A missing or invalid artifact is not replaced with a guessed version.
+    $("product-version").textContent = "Версия недоступна";
+    $("build-version").textContent = "Версия недоступна";
+  }
 }
 bindClick("create-snapshot", async () => { try { await createSnapshot(); } catch (error) { reportError(error); } });
 bindClick("reset-working", async () => {

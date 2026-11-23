@@ -6,6 +6,12 @@ HTML RVM — независимая браузерная виртуальная 
 
 **[Открыть HTML RVM JSON Lab](https://netkeep80.github.io/html_rvm/site/)** — браузерный стенд S1A: исходный JSON, отдельная изменяемая рабочая копия, операции и проверка изоляции. Интерпретатор Модели Отношений ещё не реализован.
 
+## Версия проекта
+
+**Формат: XX.YY** — XX обозначает принятую совместимую архитектуру, YY — номер merge в `main` с момента её принятия (архитектурный baseline = XX.00). Номер вычисляется по истории Git автоматически; веб-панель показывает актуальную версию и точный HEAD. На merge PR #6 зафиксирована версия **01.02**; последующие merge увеличивают YY без ручной правки файла версии.
+
+Проверка в полном Git-клоне на main: `npm run rvm:version`. [Правила, исходный SHA архитектуры и проверки](docs/VERSIONING.md).
+
 ## Назначение
 
 Сохранить семантику jsonRVM/phprvm (сущности, отношения, контексты исполнения, ссылки, программы как данные), но не переносить зависимость от локальных файлов, PHP eval или C++ адресов памяти.
@@ -34,7 +40,8 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 - [TypeScript declaration (draft)](ports/document-port.d.ts)
 - [S0 — авторская приёмка и initial RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md)
 - [S1A — read-only MemoryProvider и временная рабочая JSON-модель (Draft)](docs/S1A-MEMORY.md)
-- [S1A JSON Lab — тестовая веб-среда GitHub Pages (Draft)](docs/S1A-PAGES.md)
+- [S1A JSON Lab — тестовая веб-среда GitHub Pages](docs/S1A-PAGES.md)
+- [Версии XX.YY и правило подсчёта merge в main](docs/VERSIONING.md)
 
 ## Основания
 

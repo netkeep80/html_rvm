@@ -1,0 +1,7 @@
+{
+  "schema": "html-rvm/version-policy-v1",
+  "architecture": 1,
+  "acceptedArchitectureMerge": "406577bcf06b2c43cccbc2ef664fad875668136b",
+  "count": "first-parent-two-parent-merges-after-architecture-baseline",
+  "width": 2
+}

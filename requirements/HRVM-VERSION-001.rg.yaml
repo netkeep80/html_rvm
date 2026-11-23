@@ -1,0 +1,25 @@
+format: repo-guard/requirement-v1
+id: HRVM-VERSION-001
+normative: "### HRVM-VERSION-001 — Проект MUST использовать версию XX.YY, где XX (01..99) является номером явно авторски принятой совместимой архитектуры, а YY (00..99) — количеством штатных двухродительских merge-коммитов на first-parent цепочке main, следующих за точным принятым merge baseline этой архитектуры. Baseline MUST иметь YY=00. YY MUST выводиться из точной Git-истории, а не редактироваться вручную. Изменение XX MUST требовать отдельного авторского принятия несовместимой архитектуры и точного нового baseline. Shallow/неполная история, прямой main commit, squash/rebase, octopus merge, отсутствие baseline и переполнение формата MUST вызывать ошибку, а не подставлять неверную версию. Каждая публикация GitHub Pages с main MUST включать рассчитанный XX.YY в статический артефакт и показывать его в браузере, вместе с точным HEAD; отсутствие валидной версии MUST быть показано явно. Версия не означает выпуска реализованной RVM."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/VERSIONING.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "version-policy.json" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "tools/version.mjs" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "tools/build-pages.mjs" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/app.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/index.html" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: ".github/workflows/pages-preview.yml" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/versioning.test.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/playground-pages.test.mjs" }

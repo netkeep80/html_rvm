@@ -1,11 +1,11 @@
 {
   "name": "html-rvm-architecture",
-  "version": "0.0.0",
   "private": true,
   "type": "module",
   "description": "Accepted S0 contracts plus S1A read-only memory provider and ephemeral JSON session; RVM interpreter not implemented",
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "rvm:version": "node tools/version.mjs"
   },
   "engines": {
     "node": ">=20"
