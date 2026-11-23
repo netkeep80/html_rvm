@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-SEC-001
+normative: "### HRVM-SEC-001 — Криптографическая целостность, возможность расшифровки и видимость head MUST NOT автоматически наделять исполняемую модель доверием или write capability. Host MUST изолировать недоверенный код и явно выдавать минимальные полномочия. Документы, credentials, plaintext и capabilities MUST NOT попадать в публичные отчёты/DOM/артефакты без отдельной политики доступа. Историческая достоверность MUST быть отделена от авторизованной актуальности main head."
+lifecycle: { accepted: true, current: true, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ARCHITECTURE.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }

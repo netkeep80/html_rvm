@@ -1,0 +1,9 @@
+format: repo-guard/requirement-v1
+id: HRVM-CASE-001
+normative: "### HRVM-CASE-001 — Первым испытательным независимым потребителем SHOULD быть обезличенная касса с документами транзакций, участников, фондов и программ; вторым — склад. Финансовые остатки MUST рассчитываться по формально определённой семантике знака, единиц и ролей независимо от UI и provider. Импорт MUST различать отсутствующее значение и ноль, нормализовать aliases осознанно и сохранять идентичность операций и даты. Нельзя включать реальные персональные данные в публичные CI fixtures."
+lifecycle: { accepted: true, current: true, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ROADMAP.md" }

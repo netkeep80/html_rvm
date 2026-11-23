@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-PORT-001
+normative: "### HRVM-PORT-001 — DocumentPort/1 MUST определять DocumentReader.openSnapshot(reference?) и DocumentReader.read(snapshot, documentId). DocumentWriter.commit(base, changes) MUST быть отдельной необязательной capability хоста. Данные и изменения MUST быть выражены через JSONValue и RFC 6902 JSON Patch; разрешение RFC 6901 JSON Pointer и $ref, а также исполнение отношений MUST находиться внутри RVM и MUST NOT входить в DocumentPort. Реализации DocumentPort MUST проверять строгий JSON-домен на runtime boundary: non-finite number, undefined, function, bigint и циклическая структура не являются допустимыми JSONValue. Версия DocumentPort MUST быть независимой от версии DBMS и версии языка МО."
+lifecycle: { accepted: true, current: true, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-ARCH-001 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "ports/document-port.d.ts" }
