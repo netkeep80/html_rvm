@@ -1,0 +1,15 @@
+format: repo-guard/requirement-v1
+id: HRVM-PROJECT-000
+normative: "### HRVM-PROJECT-000 — Изменения MUST идти через Issue-first, точные BASE/HEAD/TREE, RepoGuard v6.0.1 pinned immutable SHA, самостоятельные предметные тесты, независимый read-only аудит и отдельную явную авторскую приёмку до merge. CI GREEN, READY и MERGED MUST NOT автоматически означать ACCEPTED/PUBLISHED. Отсутствие accepted baseline в первом BASE MUST быть показано как bootstrap gap, а не скрыто или обойдено."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ROADMAP.md" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: ".github/workflows/ci.yml" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/bootstrap-contract.test.mjs" }

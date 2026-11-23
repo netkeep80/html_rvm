@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-ADAPT-001
+normative: "### HRVM-ADAPT-001 — DBMSDocumentProvider MUST сопоставлять стабильные documentId с DBMS capabilities внутри адаптера, не раскрывая (ID,H) в DocumentPort. При использовании Root Registry адаптер MUST закреплять genesis identity, проверять допустимое продолжение цепочки при смене head и гарантировать согласованность чтений в выбранном main snapshot. Root Registry MUST NOT быть обязательной частью HTML RVM или независимой DBMS. Для generic JSON-document chain текущего HTML_DBMS/2.2 MUST быть явно объявлен GAP до самостоятельной реализации и проверки."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-ARCH-001 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ARCHITECTURE.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ROADMAP.md" }

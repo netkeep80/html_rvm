@@ -1,0 +1,13 @@
+{
+  "name": "html-rvm-architecture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Draft contracts and structural witnesses; RVM runtime not implemented",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

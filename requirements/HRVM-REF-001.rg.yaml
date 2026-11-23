@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-REF-001
+normative: "### HRVM-REF-001 — HTML RVM MUST независимо от storage provider разрешать стабильные логические идентификаторы сущностей, JSON-пути внутри документов и контекстные ссылки ($ent, $sub, $rel, $obj и родительские контексты). Разрешение на чтение MUST NOT менять документ. Literal, reference и invocation MUST иметь однозначно различимую семантику. Физические DBMS heads MUST NOT использоваться как идентичность сущности. Циклы и чрезмерная глубина MUST обрабатываться с ограничением ресурсов."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ARCHITECTURE.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ROADMAP.md" }

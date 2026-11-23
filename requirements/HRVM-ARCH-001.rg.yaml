@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-ARCH-001
+normative: "### HRVM-ARCH-001 — Ядра HTML RVM и HTML DBMS MUST не импортировать, не требовать и не знать типы друг друга. Все совместные сценарии MUST реализовываться в необязательном адаптере поверх нейтрального DocumentPort/1. DBMS MUST оставаться применимой для независимого JSON-приложения, а RVM MUST запускаться с MemoryDocumentProvider без DBMS. Доменные понятия crypto, AES-GCM, (ID,H), Root Registry и HTML_DBMS protocol MUST отсутствовать в публичном контракте RVM."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/ARCHITECTURE.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }
