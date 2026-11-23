@@ -13,8 +13,10 @@ const sha = number => number.toString(16).padStart(40, "0");
 const BASELINE = "406577bcf06b2c43cccbc2ef664fad875668136b";
 const MERGE5 = "08c8d4d5600b4a05ca48af7eb4516dc6102b08f7";
 const MERGE6 = "5105eeb7ac87e35a3dd478e2ed9e0fd15a990bf7";
+const MERGE10 = "3387521a9675ef745da77562cd5b2d0aac6d4266";
 const policy = readVersionPolicy();
 const firstParentHistory = [
+  { sha: MERGE10, parents: [MERGE6, "862b71fc12bda45353d4e428796d7db1f3589a56"] },
   { sha: MERGE6, parents: [MERGE5, "79ef5e72f24b996f1ac7eab941e02e64fd080385"] },
   { sha: MERGE5, parents: [BASELINE, "6b817eabe2ab584a5823ff8997896b3ede0c5b17"] },
   { sha: BASELINE, parents: ["fc60a877840c76f64b182ad404d139ef6e22b6ed", "97130766488bcfcfc87018157c606ebb95420fe1"] }
@@ -33,17 +35,18 @@ test("VERS: policy is anchored to first accepted architecture merge", () => {
   assert.throws(() => validateVersionPolicy({ ...policy, acceptedArchitectureMerge: "" }));
 });
 
-test("VERS: real accepted main first-parent chain gives 01.00 then 01.01 and 01.02", () => {
-  assert.equal(deriveVersion(policy, firstParentHistory.slice(2), BASELINE).version, "01.00");
-  assert.equal(deriveVersion(policy, firstParentHistory.slice(1), MERGE5).version, "01.01");
-  const current = deriveVersion(policy, firstParentHistory, MERGE6);
-  assert.equal(current.version, "01.02");
-  assert.equal(current.revision, 2);
-  assert.equal(current.commit, MERGE6);
+test("VERS: real accepted main ancestry gives 01.00, 01.01, 01.02, 01.03 and next merge 01.04", () => {
+  assert.equal(deriveVersion(policy, firstParentHistory.slice(3), BASELINE).version, "01.00");
+  assert.equal(deriveVersion(policy, firstParentHistory.slice(2), MERGE5).version, "01.01");
+  assert.equal(deriveVersion(policy, firstParentHistory.slice(1), MERGE6).version, "01.02");
+  const current = deriveVersion(policy, firstParentHistory, MERGE10);
+  assert.equal(current.version, "01.03");
+  assert.equal(current.revision, 3);
+  assert.equal(current.commit, MERGE10);
   const NEXT = sha(2026);
   assert.equal(deriveVersion(policy,
-    [{ sha: NEXT, parents: [MERGE6, sha(909)] }, ...firstParentHistory], NEXT
-  ).version, "01.03");
+    [{ sha: NEXT, parents: [MERGE10, sha(909)] }, ...firstParentHistory], NEXT
+  ).version, "01.04");
 });
 
 test("VERS: Git rev-list format accepts two-parent merges, rejects corruption", () => {

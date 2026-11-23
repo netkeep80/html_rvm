@@ -23,3 +23,5 @@ relations:
     target: { kind: artifact, path: "tests/versioning.test.mjs" }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: "tests/playground-pages.test.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/playground-ui-state.test.mjs" }

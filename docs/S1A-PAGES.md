@@ -10,15 +10,19 @@ https://netkeep80.github.io/html_rvm/site/
 Корень сайта содержит только безопасную ссылку-перенаправление на `./site/`. Перед передачей пользователю проверять **реальный** результат GitHub Actions, а не считать опубликованным из-за наличия YAML.
 
 Workflow `.github/workflows/pages-preview.yml`:
-- `push` **только** в `main` и `workflow_dispatch`; дополнительные `if` запрещают jobs с других веток. При **каждом** merge (включая docs-only) push в main запускает тесты, проверку версии XX.YY и затем деплой. Checkout использует `fetch-depth: 0`.
+- `push` **только** в `main` и `workflow_dispatch`; дополнительные `if` запрещают jobs с других веток. При любом merge или docs-only push в main запускаются тесты, расчёт версии по полной Git-истории и затем деплой.
 - Сначала `npm test` и детерминированная сборка `tools/build-pages.mjs`; затем `upload-pages-artifact`, `configure-pages` и `deploy-pages`.
 - Pages-доступ только у job `deploy` (`pages:write, id-token:write`); checkout `persist-credentials:false`, все Actions pinned immutable SHA. Workflow сам не создаёт commit и не изменяет main.
-- В публикацию попадают только 8 проверенных HTML/CSS/JS-файлов и 2 служебных статических файла: root redirect + `build-info.json` с точным commit. Никаких пользовательских данных, документов, GitHub secrets или файлов репозитория вне белого списка.
+- В публикацию попадают только 8 проверенных HTML/CSS/JS-файлов и 3 служебных статических файла: root redirect + `build-info.json` + `VERSION` с точным commit. Никаких пользовательских данных, документов, GitHub secrets или файлов репозитория вне белого списка.
 - Публикация из `feat/s1a-memory-working-json` не производится. Если Environment `github-pages` блокирует даже `main`, ничего не обходить и честно сообщить BLOCK.
 
-## Отображение версии XX.YY
+## S1A.1 — устранение UI BLOCK (отдельный Draft PR)
 
-По [версии VERS-001](VERSIONING.md), веб-панель показывает `vXX.YY` в шапке и `Версия XX.YY · HEAD SHA` в футере. При публикации GitHub Actions на **любом** merge в main вычисляет версию из полной first-parent истории, начиная с принятого S0 merge PR #2 (01.00), и записывает файлы `VERSION` и `site/build-info.json`. Историю и версию браузер не вычисляет, DBMS не вызывается. Если build metadata отсутствуют или некорректны, видно «Версия недоступна». Публикация сайта не означает релиз VM.
+[Аудит и границы исправлений](S1A-UX.md): входной редактор / активный snapshot / рабочий редактор / WorkingSession — четыре отдельных состояния. Добавлены состояния APPLIED / DIRTY / INVALID, запрет экспорта неприменённого рабочего черновика, структурное сравнение JSON и before→after trace. Эти UX-изменения ещё требуют отдельной авторской приёмки и не меняют ядро RVM.
+
+## Видимая версия проекта
+
+[Версионирование XX.YY](VERSIONING.md): GitHub Actions при каждом merge в main проверяет полную историю (`fetch-depth: 0`), подсчитывает число двухродительских merge от принятой архитектуры PR #2 и записывает `/VERSION` и `/site/build-info.json`. Веб-панель **показывает «Версия XX.YY» в верхней строке** и `Версия XX.YY · HEAD SHA` внизу. Без корректного build-info выводится «Версия недоступна», не выдуманный номер. Это не выпуск интерпретатора МО.
 
 ## Сценарии интерфейса
 

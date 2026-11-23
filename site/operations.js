@@ -119,7 +119,37 @@ export function stressWorking(session, id, pointer, repetitions = 1_000_000) {
   return { count: repetitions, value: first + repetitions, durationMs: performance.now() - start };
 }
 
+/**
+ * Structural equality for strict JSON.
+ * Object member order is irrelevant; array order and JSON value types matter.
+ * Uses a bounded iterative walk (no stringification or JSON prototype lookup).
+ */
+export function deepEqualJSON(a, b) {
+  const stack = [[a, b]];
+  let nodes = 0;
+  while (stack.length) {
+    if (++nodes > 200_000) throw portError("RESOURCE_LIMIT", "JSON comparison limit");
+    const [left, right] = stack.pop();
+    if (left === right) continue;
+    if (left === null || right === null || typeof left !== typeof right ||
+        typeof left !== "object") return false;
+    const la = Array.isArray(left), ra = Array.isArray(right);
+    if (la !== ra) return false;
+    if (la) {
+      if (left.length !== right.length) return false;
+      for (let i = 0; i < left.length; i++) stack.push([left[i], right[i]]);
+    } else {
+      const keys = Object.keys(left);
+      if (keys.length !== Object.keys(right).length) return false;
+      for (const key of keys) {
+        if (!Object.hasOwn(right, key)) return false;
+        stack.push([left[key], right[key]]);
+      }
+    }
+  }
+  return true;
+}
+
 export function describeDifference(source, working) {
-  // UI indicator only: JSON equality of independently serialized objects.
-  return JSON.stringify(source) === JSON.stringify(working) ? "identical" : "changed";
+  return deepEqualJSON(source, working) ? "identical" : "changed";
 }

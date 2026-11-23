@@ -23,11 +23,17 @@
 - [Тестовый JSON Lab на GitHub Pages](S1A-PAGES.md) — включён в PR #5, без VM/DBMS: исходный JSON, отдельное рабочее состояние, ручные операции, миллион инкрементов, проверка изоляции и явный экспорт. По прямому указанию автора публикация GitHub Pages запускается **только из main** после merge. Публикация тестового сайта ≠ релиз или завершённый интерпретатор МО.
 - Не считать реализацию read-only провайдера доказательством полной совместимости DocumentPort/1.
 
-## VERS-001 — версия проекта XX.YY [DRAFT / NOT_ACCEPTED]
+## S1A.1 — UX исправления JSON Lab [DRAFT / NOT_ACCEPTED]
 
-- [Issue #7](https://github.com/netkeep80/html_rvm/issues/7): архитектура XX и счётчик штатных двухродительских merge в main YY; baseline 01.00 для PR #2. Подробный [протокол версий](VERSIONING.md).
-- GitHub Pages показывает в шапке и футере автоматически вычисленный XX.YY на точном SHA; все main merge должны инициировать обновление сайта. Не объявлять версию release/production доказательством поведения VM.
-- Изменение архитектурного XX требует нового авторски принятого baseline; счётчик YY нельзя править вручную. Дефект истории / shallow checkout не должен приводить к выдаче ложной версии.
+- [Issue #9](https://github.com/netkeep80/html_rvm/issues/9) по независимому UX-аудиту: BLOCK · P1=0, P2=4, P3=3. [Scope и модель состояния](S1A-UX.md).
+- Входной и рабочий черновики отличаются от активного snapshot/WorkingSession; неприменённый рабочий текст блокирует операции и экспорт. Видны конкретные before→after, активный snapshot и RAM lifetime.
+- Без полной Studio, новых UI-зависимостей, DBMS и изменения DocumentPort. Независимый браузерный повтор необходим перед UX acceptance.
+
+## VERS-001 — автоматическая версия XX.YY на GitHub Pages
+
+- [Issue #7](https://github.com/netkeep80/html_rvm/issues/7), [PR #8](https://github.com/netkeep80/html_rvm/pull/8): версия от архитектурного baseline PR #2, `01.00` и счётчик обычных двухродительских merge в main (после PR #10 `01.03`; следующий merge увеличивает YY).
+- [Полный протокол](VERSIONING.md): проверка точной Git-истории, отдельный `VERSION` artifact и видимая версия в шапке/футере сайта.
+- Pages workflow пересчитывает номер и публикует при **каждом** main push, даже docs-only. Версия — техническая метка сборки, а не свидетельство готовой VM или DBMS.
 
 ## S1B+ — Writer/интерпретатор [PLANNED]
 

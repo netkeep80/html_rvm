@@ -13,7 +13,7 @@
   <div class="topbar">
     <div class="topbar-inner">
       <div class="brand"><span class="brand-mark">R</span><span>HTML <b>RVM</b></span><span class="brand-divider"></span><span class="brand-caption">JSON LAB</span></div>
-      <div class="topbar-right"><span class="pill pill-neutral tabular" id="product-version">Версия загружается…</span><span class="pill pill-amber">S1A · TEST LAB</span><a href="https://github.com/netkeep80/html_rvm/pull/5" target="_blank" rel="noopener noreferrer">Исходники ↗</a></div>
+      <div class="topbar-right"><span class="pill pill-version tabular" id="product-version" aria-label="Текущая версия HTML RVM">Версия загружается…</span><span class="pill pill-amber">S1A · TEST LAB</span><a href="https://github.com/netkeep80/html_rvm/tree/main/site" target="_blank" rel="noopener noreferrer">Исходники ↗</a></div>
     </div>
   </div>
 
@@ -25,13 +25,18 @@
         <p>Загружай JSON, изменяй его рабочую копию и проверяй, что исходный снимок остаётся неизменным. Всё работает локально в этой вкладке — без HTML DBMS.</p>
       </div>
       <aside class="architecture" aria-label="Архитектура демонстрации">
-        <div class="arch-node">Исходный JSON <small>DocumentReader · snapshot</small></div>
-        <div class="arch-arrow">↓ материализация копии</div>
+        <div class="arch-node">Входной JSON <small>Текст для следующего snapshot</small></div>
+        <div class="arch-arrow">↓ Создать снимок · read-only</div><div class="arch-node">Активный snapshot <small>Зафиксированное состояние</small></div><div class="arch-arrow">↓ независимая копия</div>
         <div class="arch-node arch-active">Рабочий JSON <small>Операции только в памяти</small></div>
         <div class="arch-no"><span>⊘</span> Нет автоматического commit</div>
       </aside>
     </section>
 
+    <section class="quickstart" aria-label="Начать эксперимент">
+      <div><div class="panel-label">ПОПРОБУЙ ЗА 10 СЕКУНД</div><strong>Нажми «+1»: счётчик изменится в RAM, снимок останется прежним.</strong>
+        <p id="quick-result">Было 0 → нажми «+1» → станет 1 · снимок: 0 · DBMS: 0</p></div>
+      <button type="button" id="try-plus-one" class="button button-primary">Попробовать +1 →</button>
+    </section>
     <section class="stats" aria-label="Показатели сеанса">
       <div class="stat"><span class="stat-name">Операций с рабочим JSON</span><strong id="stat-mutations" class="tabular">0</strong><span class="stat-foot">Только текущая вкладка</span></div>
       <div class="stat"><span class="stat-name">Записей в HTML DBMS</span><strong class="stat-green tabular">0</strong><span class="stat-foot">Writer не подключён</span></div>
@@ -39,32 +44,42 @@
       <div class="stat"><span class="stat-name">Последний стресс-тест</span><strong id="stat-duration" class="tabular">—</strong><span class="stat-foot">Время браузера, не VM</span></div>
     </section>
 
+    <section class="change-card" aria-label="Последнее изменение">
+      <div class="panel-label">ПОСЛЕДНЕЕ ИЗМЕНЕНИЕ · WORKING JSON</div>
+      <div class="change-line"><strong id="change-operation">Пока нет изменений</strong><code id="change-path">—</code></div>
+      <div class="change-values"><span>До: <code id="change-before">—</code></span><span class="change-arrow">→</span><span>После: <code id="change-after">—</code></span></div>
+      <p>В активном snapshot: <code id="change-snapshot">—</code> · Записей в HTML DBMS: <b>0</b></p>
+    </section>
+
     <section class="workspace" aria-label="Рабочая среда">
       <article class="panel">
-        <div class="panel-heading"><div><div class="panel-label">01 · ИСТОЧНИК</div><h2>Исходный JSON</h2></div><span class="panel-chip">Загружаемый</span></div>
-        <p class="panel-desc">Изменения текста не затрагивают снимок, пока ты не нажмёшь «Создать снимок».</p>
+        <div class="panel-heading"><div><div class="panel-label">01 · ЧЕРНОВИК ВХОДА</div><h2>Входной JSON</h2></div><span class="panel-chip">Загружаемый</span></div>
+        <p class="panel-desc">Редактор для <b>следующего</b> снимка. Изменения текста не обновляют активный snapshot.</p>
+        <p id="source-state" class="draft-state" role="status" aria-live="polite">Черновик применён к активному snapshot</p>
+        <p id="snapshot-info" class="snapshot-info">Активный snapshot #1 · только чтение</p>
         <div class="preset-line">
           <button type="button" class="preset active" data-preset="counter">Счётчик</button>
           <button type="button" class="preset" data-preset="cash">Касса</button>
           <label class="preset preset-upload" for="source-file">↑ Импорт JSON</label>
           <input id="source-file" type="file" accept=".json,application/json" hidden>
         </div>
-        <label class="sr-only" for="source-editor">Редактор исходного JSON</label>
-        <textarea id="source-editor" class="code-editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Исходный JSON">{
+        <label class="sr-only" for="source-editor">Редактор входного JSON</label>
+        <textarea id="source-editor" class="code-editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Входной JSON">{
   "counter": 0,
   "message": "Рабочая копия независима от снимка",
   "meta": { "version": 1 },
   "events": []
 }</textarea>
-        <div class="panel-footer"><span id="source-size">—</span><button type="button" id="create-snapshot" class="button button-primary">Создать снимок <span aria-hidden="true">→</span></button></div>
+        <div class="panel-footer"><span id="source-size">—</span><button type="button" id="create-snapshot" class="button button-primary">Создать snapshot и рабочую копию <span aria-hidden="true">→</span></button></div>
       </article>
 
       <article class="panel panel-working">
         <div class="panel-heading"><div><div class="panel-label">02 · ИСПОЛНЕНИЕ</div><h2>Рабочий JSON</h2></div><span class="panel-chip panel-chip-blue">В памяти</span></div>
-        <p class="panel-desc">Здесь можно редактировать данные вручную или использовать операции ниже. Исходный snapshot не меняется.</p>
+        <p class="panel-desc">Активное временное состояние в RAM. <b>Перезагрузка страницы удалит все изменения.</b> Изменения текста действуют только после «Применить».</p>
+        <p id="working-state" class="draft-state" role="status" aria-live="polite">Редактор соответствует активной рабочей модели</p>
         <div class="preset-line working-tools">
-          <span id="diff-status" class="diff-indicator">Совпадает с источником</span>
-          <div class="working-actions"><button id="reset-working" type="button" class="preset">↺ Сброс</button><button id="export-working" type="button" class="preset">↓ Экспорт</button></div>
+          <span id="diff-status" class="diff-indicator">Совпадает с активным snapshot</span>
+          <div class="working-actions"><button id="discard-working" type="button" class="preset" disabled>Отменить правку</button><button id="reset-working" type="button" class="preset">↺ Сброс</button><button id="export-working" type="button" class="preset">↓ Экспорт</button></div>
         </div>
         <label class="sr-only" for="working-editor">Редактор рабочего JSON</label>
         <textarea id="working-editor" class="code-editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Рабочий JSON"></textarea>
