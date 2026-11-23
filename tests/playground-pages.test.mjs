@@ -14,6 +14,15 @@ test("Pages preview is static, labelled DRAFT and uses relative assets", () => {
   const html = file("site/index.html");
   assert.match(html, /lang="ru"/);
   assert.match(html, /S1A · TEST LAB/);
+  for (const id of ["try-plus-one", "quick-result", "source-state", "working-state",
+    "snapshot-info", "discard-working", "change-before", "change-after", "change-snapshot"]) {
+    assert.match(html, new RegExp('id="' + id + '"'));
+  }
+  assert.match(html, /Входной JSON/);
+  assert.match(html, /Перезагрузка страницы удалит все изменения/);
+  const css = file("site/styles.css");
+  assert.match(css, /@media\(max-width:340px\)/);
+  assert.match(css, /\.topbar-right a \{ display: none; \}/);
   assert.match(html, /href="\.\/styles\.css"/);
   assert.match(html, /src="\.\/app\.js"/);
   for (const id of [
