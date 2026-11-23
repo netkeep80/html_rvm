@@ -23,6 +23,12 @@
 - [Тестовый JSON Lab на GitHub Pages](S1A-PAGES.md) — включён в PR #5, без VM/DBMS: исходный JSON, отдельное рабочее состояние, ручные операции, миллион инкрементов, проверка изоляции и явный экспорт. По прямому указанию автора публикация GitHub Pages запускается **только из main** после merge. Публикация тестового сайта ≠ релиз или завершённый интерпретатор МО.
 - Не считать реализацию read-only провайдера доказательством полной совместимости DocumentPort/1.
 
+## S1A.1 — UX исправления JSON Lab [DRAFT / NOT_ACCEPTED]
+
+- [Issue #9](https://github.com/netkeep80/html_rvm/issues/9) по независимому UX-аудиту: BLOCK · P1=0, P2=4, P3=3. [Scope и модель состояния](S1A-UX.md).
+- Входной и рабочий черновики отличаются от активного snapshot/WorkingSession; неприменённый рабочий текст блокирует операции и экспорт. Видны конкретные before→after, активный snapshot и RAM lifetime.
+- Без полной Studio, новых UI-зависимостей, DBMS и изменения DocumentPort. Независимый браузерный повтор необходим перед UX acceptance.
+
 ## S1B+ — Writer/интерпретатор [PLANNED]
 
 - Optional DocumentWriter с атомарным multi-document CAS/RFC6902 — отдельный проектный срез, без прямого DBMS API в VM.

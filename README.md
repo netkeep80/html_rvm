@@ -35,6 +35,7 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 - [S0 — авторская приёмка и initial RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md)
 - [S1A — read-only MemoryProvider и временная рабочая JSON-модель (Draft)](docs/S1A-MEMORY.md)
 - [S1A JSON Lab — тестовая веб-среда GitHub Pages (Draft)](docs/S1A-PAGES.md)
+- [S1A.1 — модель UI-черновиков, snapshot и before/after](docs/S1A-UX.md)
 
 ## Основания
 
