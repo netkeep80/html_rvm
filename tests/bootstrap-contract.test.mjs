@@ -61,8 +61,10 @@ test("RepoGuard immutable release SHA and exact PR refs present", () => {
 test("canonical requirement IDs, document links and recorded S0 lifecycle exist", () => {
   const reqdir = resolve(root, "requirements");
   const paths = readdirSync(reqdir).filter(p => p.endsWith(".rg.yaml"));
-  assert.equal(paths.length, 16, "author-approved S0 requirement count");
+  assert.ok(paths.length >= 16, "at least the 16 author-approved S0 requirements");
   const ids = new Set();
+  let s0Accepted = 0;
+  let otherCandidates = 0;
   for (const name of paths) {
     const content = read("requirements/" + name);
     const id = content.match(/^id:\s*(HRVM-[A-Z]+-\d{3})\s*$/m)?.[1];
@@ -71,14 +73,25 @@ test("canonical requirement IDs, document links and recorded S0 lifecycle exist"
     ids.add(id);
     assert.equal(name, id + ".rg.yaml");
     assert.match(content, /^format: repo-guard\/requirement-v1$/m);
-    // Verifies serialized lifecycle only; NOT evidence that the author accepted it.
-    assert.match(content, /accepted: true/);
-    assert.match(content, /current: true/);
+    // Checks recorded lifecycle, NOT factual approval by a CI runner.
+    // All 16 accepted S0 requirements remain accepted; new requirements
+    // must stay candidate until a separate explicit author acceptance.
+    if (/accepted: true/.test(content)) {
+      s0Accepted++;
+      assert.match(content, /current: true/);
+    } else {
+      otherCandidates++;
+      assert.match(content, /accepted: false/);
+      assert.match(content, /current: false/);
+    }
     assert.match(content, /published: false/);
     for (const match of content.matchAll(/kind: artifact, path: "([^"]+)"/g)) {
       assert.ok(existsSync(resolve(root, match[1])), id + " target missing: " + match[1]);
     }
   }
+  assert.equal(s0Accepted, 16, "accepted S0 baseline must remain 16 requirements");
+  assert.equal(otherCandidates, paths.length - 16);
+  assert.ok(ids.has("HRVM-VERSION-001"), "versioning requirement is a candidate");
   assert.ok(ids.has("HRVM-PRODUCT-000"));
   assert.ok(ids.has("HRVM-PROJECT-000"));
   assert.ok(ids.has("HRVM-WORK-001"));
