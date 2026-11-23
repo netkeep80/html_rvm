@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-SNAP-001
 normative: "### HRVM-SNAP-001 — openSnapshot MUST фиксировать консистентный набор версий документов данного провайдера. Все read через один snapshot MUST обращаться к этому набору, независимо от последующих commit и публикации новых heads. Snapshot handle MUST быть непрозрачен и привязан к instance провайдера; provider-specific historical locator MUST NOT трактоваться VM как физический адрес или гарантированно переносимый ID. Непроверенные или недоступные версии MUST отвергаться явной ошибкой."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PORT-001 }

@@ -1,6 +1,6 @@
-# Архитектура HTML RVM — решение-кандидат BOOT-001
+# Архитектура HTML RVM — принятый S0 baseline / BOOT-001
 
-Статус: DRAFT, авторская приёмка ещё не зафиксирована. Нормативная authority: requirements/*.rg.yaml.
+Статус: **AUTHOR_ACCEPTED 2026-11-23** (только архитектура; runtime не реализован). Нормативная authority: requirements/*.rg.yaml. [Решение и bootstrap-gap](BOOTSTRAP-ACCEPTANCE.md).
 
 ## 1. Два независимых продукта и необязательный адаптер
 

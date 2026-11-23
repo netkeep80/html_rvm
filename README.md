@@ -14,7 +14,7 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 
 ## Состояние
 
-- Документирован **кандидат** DocumentPort/1 — не реализованный контракт и не принятый релиз.
+- Автором **принята архитектура S0 и интерфейсный проект DocumentPort/1 (23.11.2026)**. Исполняемая VM и conformance tests пока отсутствуют; релиз не объявлен. [Точная приёмка и первоначальный RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md).
 - Канонические нормативные требования — в каталоге requirements/*.rg.yaml. Остальные документы объясняют и иллюстрируют их, но не заменяют.
 - RepoGuard v6.0.1 подключается через immutable commit SHA; первый PR содержит bootstrap-требования и требует отдельной проверки первоначальной authority.
 - Нет принятого production приложения, готового VM, DBMS адаптера или доказанных контрактных тестов.
@@ -27,6 +27,7 @@ HTML DBMS остаётся самостоятельной JSON-СУБД и не 
 - [Требования и трассировка](docs/REQUIREMENTS.md)
 - [Roadmap, acceptance и gaps](docs/ROADMAP.md)
 - [TypeScript declaration (draft)](ports/document-port.d.ts)
+- [S0 — авторская приёмка и initial RepoGuard gap](docs/BOOTSTRAP-ACCEPTANCE.md)
 
 ## Основания
 

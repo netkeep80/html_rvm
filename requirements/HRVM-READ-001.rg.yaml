@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-READ-001
 normative: "### HRVM-READ-001 — read(snapshot, documentId) MUST возвращать корректное JSON-значение без изменения наблюдаемого состояния хранилища или создания документов; результат MUST быть отделён от внутреннего mutable state. Повторное успешное чтение одного документа из одного snapshot MUST быть семантически эквивалентным. Отсутствующий документ, недействительная ссылка, нарушение целостности, отсутствие прав и исчерпание ресурсов MUST различаться машинными кодами ошибок."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PORT-001 }

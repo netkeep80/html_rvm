@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-WRITE-001
 normative: "### HRVM-WRITE-001 — DocumentWriter MUST предоставляться только по явному решению доверенного хоста; исполнение отношения и изменения временной JSON-модели MUST NOT самостоятельно фиксировать запись. Сохранение результата исполнения МО MUST инициироваться только явной сущностью/намерением МО и после независимого разрешения доверенного хоста; автоматический commit каждой самомодификации, периодический autosave и commit при окончании исполнения MUST NOT выполняться без такой явной сущности. commit MUST применять список RFC 6902 Patch к существующим документам атомарно в масштабе одного provider instance и возвращать новый snapshot только после полной публикации. При неверном Patch, конфликте со stale base или отказе в доступе MUST NOT публиковаться частичное изменение. Ограничения single-provider atomicity MUST быть задокументированы, global CAS/offline consensus MUST NOT подразумеваться."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PORT-001 }

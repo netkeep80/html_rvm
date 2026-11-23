@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-BOOT-001
 normative: "### HRVM-BOOT-001 — Первоначальный bootstrap MUST выполнять структурные проверки наличия и нейтральности DocumentPort declarations, отсутствия явно запрещённых прямых imports, имён и ссылок канонических Requirements и immutable SHA RepoGuard в CI. Проверка MUST содержать позитивные и негативные свидетели и MUST NOT заявлять доказательство авторской приёмки, транзитивной независимости ядер, поведения runtime или полного соответствия DocumentPort/1."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PROJECT-000 }

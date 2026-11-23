@@ -58,10 +58,10 @@ test("RepoGuard immutable release SHA and exact PR refs present", () => {
   assert.ok(workflow.includes("fetch-depth: 0"));
 });
 
-test("canonical requirement IDs, document links and candidate lifecycle exist", () => {
+test("canonical requirement IDs, document links and recorded S0 lifecycle exist", () => {
   const reqdir = resolve(root, "requirements");
   const paths = readdirSync(reqdir).filter(p => p.endsWith(".rg.yaml"));
-  assert.ok(paths.length >= 12);
+  assert.equal(paths.length, 16, "author-approved S0 requirement count");
   const ids = new Set();
   for (const name of paths) {
     const content = read("requirements/" + name);
@@ -71,14 +71,19 @@ test("canonical requirement IDs, document links and candidate lifecycle exist", 
     ids.add(id);
     assert.equal(name, id + ".rg.yaml");
     assert.match(content, /^format: repo-guard\/requirement-v1$/m);
-    assert.match(content, /accepted: false/);
-    assert.match(content, /current: false/);
+    // Verifies serialized lifecycle only; NOT evidence that the author accepted it.
+    assert.match(content, /accepted: true/);
+    assert.match(content, /current: true/);
+    assert.match(content, /published: false/);
     for (const match of content.matchAll(/kind: artifact, path: "([^"]+)"/g)) {
       assert.ok(existsSync(resolve(root, match[1])), id + " target missing: " + match[1]);
     }
   }
   assert.ok(ids.has("HRVM-PRODUCT-000"));
   assert.ok(ids.has("HRVM-PROJECT-000"));
+  assert.ok(ids.has("HRVM-WORK-001"));
+  assert.ok(ids.has("HRVM-PERSIST-001"));
+  assert.match(read("docs/BOOTSTRAP-ACCEPTANCE.md"), /7103952294/);
   for (const name of paths) {
     const content = read("requirements/" + name);
     for (const target of content.matchAll(/kind: requirement, id: (HRVM-[A-Z]+-\d{3})/g)) {

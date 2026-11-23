@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-LICENSE-001
 normative: "### HRVM-LICENSE-001 — Проект MUST сохранять явно определённые условия распространения исходников в собственном файле LICENSE. Любая будущая metadata дистрибутива MUST не противоречить этим условиям. Файл LICENSE является свидетельством условий лицензирования и MUST NOT использоваться как документация функциональной семантики Модели Отношений."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PROJECT-000 }

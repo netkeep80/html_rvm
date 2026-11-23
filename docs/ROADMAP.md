@@ -2,13 +2,13 @@
 
 ## Точка BOOT-001
 
-Репозиторий создан с LICENSE; техническая реализация отсутствует. Зафиксирована только проектная архитектура двух независимых систем и предложение DocumentPort/1. Ссылки на чужие репозитории не означают перенос их кода.
+Репозиторий создан с LICENSE; техническая реализация отсутствует. Зафиксирована авторски принятая архитектура двух независимых систем и проект DocumentPort/1 (runtime ещё не реализован). Решение S0: [BOOTSTRAP-ACCEPTANCE.md](BOOTSTRAP-ACCEPTANCE.md). Ссылки на чужие репозитории не означают перенос их кода.
 
-## S0 — Canonical requirements / RepoGuard [DRAFT]
+## S0 — Canonical requirements / RepoGuard [AUTHOR_ACCEPTED 2026-11-23]
 
 - Записать проектные требования, границы, риски и конформанс-матрицу.
 - Подключить immutable RepoGuard v6.0.1 в PR CI.
-- Честно отразить initial BASE без Requirements (J1/J3 bootstrap gap).
+- Явно учесть initial BASE без Requirements (J1 BASE RED, J3 HEAD PASS) и отдельное авторское решение о единичном bootstrap merge без отключения compiler.
 - Независимый аудит exact BASE/HEAD/TREE; отдельная авторская приёмка до merge.
 
 ## Обязательный принцип исполнения

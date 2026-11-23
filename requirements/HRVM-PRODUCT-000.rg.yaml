@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-PRODUCT-000
 normative: "### HRVM-PRODUCT-000 — HTML RVM MUST быть самостоятельным исполнителем Модели Отношений с сущностями, отношениями, контекстами исполнения и проекциями поверх JSON-документов. Исполнитель MUST работать без HTML DBMS, без криптографического протокола и без физической файловой системы. Выполнение МО MUST происходить над временным изменяемым JSON-состоянием, материализованным из доступного snapshot провайдера, без автоматической фиксации каждой самомодификации. Содержимое JSON может описывать программу МО, но чтение документа не означает автоматического исполнения. Состояние выполнения и подтверждение готовности продукта MUST различаться."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ documents ]
     target: { kind: artifact, path: "README.md" }
