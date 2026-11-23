@@ -15,12 +15,12 @@
 
 - Независимый reader, immutable snapshot, deep copy, typed errors.
 - Optional writer с атомарными multi-document changes, optimistic conflict.
-- Положительные и отрицательные тесты C01–C09; никакой DBMS в транзитивных зависимостях.
+- Положительные и отрицательные тесты C01–C09 и C16–C18 (чужие/поддельные handles, iframe/Worker и строгий JSON-домен); никакой DBMS в транзитивных зависимостях.
 
 ## S2 — HTML RVM VM [PLANNED]
 
 - Модель сущностей/отношений, контекстные ссылки произвольной разрешённой глубины.
-- Строгий resolver, разделённые literal/reference/invocation semantics; no eval.
+- Строгий resolver RFC 6901 после полнодокументного read, разделённые literal/reference/invocation semantics; no eval. C19 проверяет, что `pointer` и контекстная адресация принадлежат RVM.
 - Безопасность записи и ресурсные лимиты; golden тесты адресации jsonRVM.
 
 ## S3 — Универсальный DBMS JSON store и adapter [PLANNED]

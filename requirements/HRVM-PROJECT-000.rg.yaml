@@ -11,7 +11,5 @@ relations:
     target: { kind: artifact, path: "docs/ROADMAP.md" }
   - predicates: [ implemented_by ]
     target: { kind: artifact, path: ".github/workflows/ci.yml" }
-  - predicates: [ verified_by ]
-    target: { kind: artifact, path: "tests/bootstrap-contract.test.mjs" }
   - predicates: [ implemented_by ]
     target: { kind: artifact, path: "package.json" }

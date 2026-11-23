@@ -7,5 +7,3 @@ relations:
     target: { kind: artifact, path: "README.md" }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/ARCHITECTURE.md" }
-  - predicates: [ documents ]
-    target: { kind: artifact, path: "LICENSE" }

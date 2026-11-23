@@ -14,6 +14,7 @@ test("document port exports neutral interface and optional writer", () => {
   assert.match(src, /interface DocumentReader/);
   assert.match(src, /openSnapshot\(reference\?: string\)/);
   assert.match(src, /read\(snapshot: SnapshotHandle, documentId: DocumentId\)/);
+  assert.doesNotMatch(src, /read\(snapshot: SnapshotHandle, documentId: DocumentId, pointer/);
   assert.match(src, /interface DocumentWriter/);
   assert.match(src, /commit\(/);
   for (const forbidden of ["HTML_DBMS", "HTMLDBMSCore", "AES-GCM", "ID,H", "$sub", "$rel"]) {
