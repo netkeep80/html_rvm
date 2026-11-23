@@ -74,6 +74,7 @@ test("C18: invalid JSON is rejected at the constructor boundary", () => {
       return ["INVALID_REFERENCE", "RESOURCE_LIMIT"].includes(error?.code);
     });
   }
+  assert.throws(() => new MemoryDocumentProvider({ bad: sparse }), code("INVALID_REFERENCE"));
   assert.throws(() => new MemoryDocumentProvider({ bad: { x: undefined } }), code("INVALID_REFERENCE"));
   const symbolKey = { [Symbol("x")]: "value" };
   assert.throws(() => new MemoryDocumentProvider({ bad: symbolKey }), code("INVALID_REFERENCE"));

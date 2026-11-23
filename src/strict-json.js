@@ -39,8 +39,11 @@ export function cloneStrictJSON(value, { maxDepth = 128, maxNodes = 100_000 } = 
     try {
       const keys = Reflect.ownKeys(node);
       if (isArray) {
-        if (node.length > maxNodes || keys.length !== node.length + 1) {
-          throw portError("RESOURCE_LIMIT", "Array size exceeds configured limits or has extra keys");
+        if (node.length > maxNodes) {
+          throw portError("RESOURCE_LIMIT", "JSON array exceeds configured size limit");
+        }
+        if (keys.length !== node.length + 1) {
+          throw portError("INVALID_REFERENCE", "Sparse or non-JSON array properties");
         }
         const out = new Array(node.length);
         for (let index = 0; index < node.length; index++) {
