@@ -1,0 +1,7 @@
+format: repo-guard/requirement-v1
+id: HRVM-GOAL-003
+normative: "### HRVM-GOAL-003 — HTML RVM MUST позволять runtime и storage provider развиваться независимо и интегрироваться через нейтральную границу вместо взаимного импорта."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

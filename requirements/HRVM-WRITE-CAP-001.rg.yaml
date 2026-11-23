@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-WRITE-CAP-001
+normative: "### HRVM-WRITE-CAP-001 — DocumentWriter capability MUST выдаваться только явным решением trusted host и не возникать из факта исполнения отношения или наличия WorkingSession."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-WRITE-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-003 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

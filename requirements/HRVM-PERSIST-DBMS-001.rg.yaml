@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-PERSIST-DBMS-001
+normative: "### HRVM-PERSIST-DBMS-001 — Контракт и криптографический протокол DBMS MUST оставаться независимыми от синтаксиса языка МО и PersistenceIntent."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PERSIST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-GOAL-003 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

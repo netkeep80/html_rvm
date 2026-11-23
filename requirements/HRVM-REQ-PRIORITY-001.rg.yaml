@@ -1,0 +1,13 @@
+format: repo-guard/requirement-v1
+id: HRVM-REQ-PRIORITY-001
+normative: "### HRVM-REQ-PRIORITY-001 — Каждый native Requirement HTML RVM MUST иметь ровно один явный implementation priority в versioned priority-map по шкале MUST_FOR_NEXT_STAGE, SHOULD или LATER."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "requirements/metadata/priority-map.json" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/requirements-normalization.test.mjs" }

@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-USER-001
+normative: "### HRVM-USER-001 — Пользователь HTML RVM MUST иметь возможность открыть стабильный snapshot и получить из него изолированное изменяемое рабочее JSON-состояние для одного исполнения."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-GOAL-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-GOAL-002 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

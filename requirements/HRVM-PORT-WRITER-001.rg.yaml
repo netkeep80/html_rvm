@@ -1,0 +1,13 @@
+format: repo-guard/requirement-v1
+id: HRVM-PORT-WRITER-001
+normative: "### HRVM-PORT-WRITER-001 — DocumentWriter.commit(base, changes) MUST оставаться отдельной необязательной capability, не входящей в обязательную read-only поверхность DocumentReader."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PORT-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-003 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/bootstrap-contract.test.mjs" }

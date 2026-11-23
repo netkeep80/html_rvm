@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-TEST-EVIDENCE-001
+normative: "### HRVM-TEST-EVIDENCE-001 — Поведенческая совместимость MUST подтверждаться исполняемым evidence, а documentation, type declarations и RepoGuard traceability не должны подменять behavioral test."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-GOAL-001 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

@@ -35,6 +35,13 @@
 - [Полный протокол](VERSIONING.md): проверка точной Git-истории, отдельный `VERSION` artifact и видимая версия в шапке/футере сайта.
 - Pages workflow пересчитывает номер и публикует при **каждом** main push, даже docs-only. Версия — техническая метка сборки, а не свидетельство готовой VM или DBMS.
 
+## REQ-NORM-001 — нормализация требований [DRAFT / NOT_ACCEPTED]
+
+- [Issue #11](https://github.com/netkeep80/html_rvm/issues/11): requirements-only срез по независимому аудиту Вигерса/Битти, без изменения runtime.
+- Вводится candidate graph `GOAL → USER → atomic`; в первом срезе атомизируются `PORT / WRITE / PERSIST / REF / TEST`. Исходные 16 accepted S0 остаются authority до отдельной миграционной приёмки.
+- [Метод нормализации](REQUIREMENTS-NORMALIZATION.md), [glossary](GLOSSARY.md), explicit priority sidecar и строгая семантика `verified_by`.
+- Перед authority migration обязателен независимый read-only requirements audit; CI/merge не означают acceptance.
+
 ## S1B+ — Writer/интерпретатор [PLANNED]
 
 - Optional DocumentWriter с атомарным multi-document CAS/RFC6902 — отдельный проектный срез, без прямого DBMS API в VM.

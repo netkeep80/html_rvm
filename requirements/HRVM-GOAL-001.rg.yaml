@@ -1,0 +1,7 @@
+format: repo-guard/requirement-v1
+id: HRVM-GOAL-001
+normative: "### HRVM-GOAL-001 — HTML RVM MUST позволять пользователю исполнять и наблюдать преобразования Модели Отношений над JSON в браузере без обязательной зависимости от конкретного persistent storage."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

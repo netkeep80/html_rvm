@@ -67,7 +67,7 @@ test("canonical requirement IDs, document links and recorded S0 lifecycle exist"
   let otherCandidates = 0;
   for (const name of paths) {
     const content = read("requirements/" + name);
-    const id = content.match(/^id:\s*(HRVM-[A-Z]+-\d{3})\s*$/m)?.[1];
+    const id = content.match(/^id:\s*(HRVM-[A-Z]+(?:-[A-Z]+)*-\d{3})\s*$/m)?.[1];
     assert.ok(id, "missing ID " + name);
     assert.equal(ids.has(id), false);
     ids.add(id);
@@ -99,7 +99,7 @@ test("canonical requirement IDs, document links and recorded S0 lifecycle exist"
   assert.match(read("docs/BOOTSTRAP-ACCEPTANCE.md"), /7103952294/);
   for (const name of paths) {
     const content = read("requirements/" + name);
-    for (const target of content.matchAll(/kind: requirement, id: (HRVM-[A-Z]+-\d{3})/g)) {
+    for (const target of content.matchAll(/kind: requirement, id: (HRVM-[A-Z]+(?:-[A-Z]+)*-\d{3})/g)) {
       assert.ok(ids.has(target[1]), "unresolved requirement " + target[1]);
     }
   }

@@ -1,0 +1,47 @@
+{
+  "schema": "html-rvm/legacy-to-atomic-v1",
+  "note": "Candidate mapping only; no supersession until explicit author acceptance.",
+  "legacy": {
+    "HRVM-PORT-001": [
+      "HRVM-PORT-READER-001",
+      "HRVM-PORT-WRITER-001",
+      "HRVM-PORT-DATA-001",
+      "HRVM-PORT-BOUNDARY-001",
+      "HRVM-PORT-JSON-001",
+      "HRVM-PORT-VERSION-001"
+    ],
+    "HRVM-WRITE-001": [
+      "HRVM-WRITE-CAP-001",
+      "HRVM-WRITE-TRIGGER-001",
+      "HRVM-WRITE-ATOMIC-001",
+      "HRVM-WRITE-FAIL-001",
+      "HRVM-WRITE-SCOPE-001"
+    ],
+    "HRVM-PERSIST-001": [
+      "HRVM-PERSIST-INTENT-001",
+      "HRVM-PERSIST-NEUTRAL-001",
+      "HRVM-PERSIST-AUTH-001",
+      "HRVM-PERSIST-FAIL-001",
+      "HRVM-PERSIST-HISTORY-001",
+      "HRVM-PERSIST-DBMS-001"
+    ],
+    "HRVM-REF-001": [
+      "HRVM-REF-IDENTITY-001",
+      "HRVM-REF-READ-001",
+      "HRVM-REF-WORK-001",
+      "HRVM-REF-KINDS-001",
+      "HRVM-REF-DBMS-001",
+      "HRVM-REF-LIMIT-001"
+    ],
+    "HRVM-TEST-001": [
+      "HRVM-TEST-READ-001",
+      "HRVM-TEST-WRITE-001",
+      "HRVM-TEST-CAP-001",
+      "HRVM-TEST-PARITY-001",
+      "HRVM-TEST-EVIDENCE-001",
+      "HRVM-TEST-MATRIX-001",
+      "HRVM-TEST-WORK-001",
+      "HRVM-TEST-PERSIST-001"
+    ]
+  }
+}

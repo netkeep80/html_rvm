@@ -1,0 +1,9 @@
+format: repo-guard/requirement-v1
+id: HRVM-USER-004
+normative: "### HRVM-USER-004 — Разработчик provider MUST иметь возможность подключить JSON storage к RVM без раскрытия VM физической идентичности или протокола этого storage."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-GOAL-003 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

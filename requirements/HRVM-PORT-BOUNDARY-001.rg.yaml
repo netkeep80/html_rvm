@@ -1,0 +1,13 @@
+format: repo-guard/requirement-v1
+id: HRVM-PORT-BOUNDARY-001
+normative: "### HRVM-PORT-BOUNDARY-001 — DocumentPort/1 MUST исключать разрешение RFC 6901 pointer, ссылок МО и исполнение отношений из provider API и оставлять эту семантику внутри RVM."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PORT-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-USER-004 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/bootstrap-contract.test.mjs" }
