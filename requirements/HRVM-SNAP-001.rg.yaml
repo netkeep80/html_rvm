@@ -4,7 +4,7 @@ normative: "### HRVM-SNAP-001 — openSnapshot MUST фиксировать ко�
 lifecycle: { accepted: true, current: true, published: false }
 relations:
   - predicates: [ derives_from ]
-    target: { kind: requirement, id: HRVM-PORT-001 }
+    target: { kind: requirement, id: HRVM-PORT-READER-001 }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/DOCUMENT-PORT-1.md" }
 

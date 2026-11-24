@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-WORK-001
 normative: "### HRVM-TEST-WORK-001 — Contract suite MUST исполняемо проверять ноль writer/DBMS side effects при высокочастотных WorkingSession mutations без явного PersistenceIntent."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-002 }
   - predicates: [ documents ]

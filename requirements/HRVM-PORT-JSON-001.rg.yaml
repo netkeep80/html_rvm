@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-PORT-JSON-001
 normative: "### HRVM-PORT-JSON-001 — Каждая runtime boundary DocumentPort/1 MUST отвергать значения вне строгого JSON-домена, включая non-finite number, undefined, function, bigint и циклические структуры."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-PORT-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-ARCH-001 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-004 }
   - predicates: [ documents ]

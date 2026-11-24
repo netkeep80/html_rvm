@@ -1,6 +1,6 @@
 {
   "schema": "html-rvm/legacy-to-atomic-v1",
-  "note": "Candidate mapping only; no supersession until explicit author acceptance.",
+  "note": "Audited REQ-NORM-001 mapping; REQ-AUTH-001 proposes corresponding supersedes edges, subject to independent audit and explicit author acceptance.",
   "legacy": {
     "HRVM-PORT-001": [
       "HRVM-PORT-READER-001",

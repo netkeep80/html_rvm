@@ -63,7 +63,8 @@ test("canonical requirement IDs, document links and recorded S0 lifecycle exist"
   const paths = readdirSync(reqdir).filter(p => p.endsWith(".rg.yaml"));
   assert.ok(paths.length >= 16, "at least the 16 author-approved S0 requirements");
   const ids = new Set();
-  let s0Accepted = 0;
+  let acceptedCurrent = 0;
+  let acceptedHistorical = 0;
   let otherCandidates = 0;
   for (const name of paths) {
     const content = read("requirements/" + name);
@@ -74,11 +75,11 @@ test("canonical requirement IDs, document links and recorded S0 lifecycle exist"
     assert.equal(name, id + ".rg.yaml");
     assert.match(content, /^format: repo-guard\/requirement-v1$/m);
     // Checks recorded lifecycle, NOT factual approval by a CI runner.
-    // All 16 accepted S0 requirements remain accepted; new requirements
-    // must stay candidate until a separate explicit author acceptance.
+    // Proposed REQ-AUTH lifecycle; historical acceptance stays recorded.
+    // Actual author acceptance is a separate external gate.
     if (/accepted: true/.test(content)) {
-      s0Accepted++;
-      assert.match(content, /current: true/);
+      if (/current: true/.test(content)) acceptedCurrent++;
+      else { assert.match(content, /current: false/); acceptedHistorical++; }
     } else {
       otherCandidates++;
       assert.match(content, /accepted: false/);
@@ -89,8 +90,10 @@ test("canonical requirement IDs, document links and recorded S0 lifecycle exist"
       assert.ok(existsSync(resolve(root, match[1])), id + " target missing: " + match[1]);
     }
   }
-  assert.equal(s0Accepted, 16, "accepted S0 baseline must remain 16 requirements");
-  assert.equal(otherCandidates, paths.length - 16);
+  assert.equal(paths.length, 62);
+  assert.equal(acceptedCurrent, 45);
+  assert.equal(acceptedHistorical, 5);
+  assert.equal(otherCandidates, 12);
   assert.ok(ids.has("HRVM-VERSION-001"), "versioning requirement is a candidate");
   assert.ok(ids.has("HRVM-PRODUCT-000"));
   assert.ok(ids.has("HRVM-PROJECT-000"));

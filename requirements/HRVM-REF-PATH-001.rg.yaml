@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-REF-PATH-001
 normative: "### HRVM-REF-PATH-001 — RVM resolver MUST разрешать JSON-пути внутри документов независимо от конкретного storage provider."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-REF-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-001 }
   - predicates: [ documents ]

@@ -1,7 +1,7 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-001
 normative: "### HRVM-TEST-001 — До заявления о совместимости DocumentPort/1 MUST существовать исполняемые позитивные и негативные contract tests для pure read, изоляции snapshot, сохранения identity, нескольких документов в atomic commit, INVALID_PATCH, CONFLICT, ограничений capability, ошибок и Memory/DBMS parity. Наличие сценария в документации, проверка типов или RepoGuard traceability MUST NOT объявляться доказательством поведения. Матрица C01–C26 MUST отличать planned от executed. Тесты MUST проверять отсутствие автоматических writer/DBMS side effects при высокочастотных рабочих мутациях и наличие явно авторизованного persistence intent."
-lifecycle: { accepted: true, current: true, published: false }
+lifecycle: { accepted: true, current: false, published: false }
 relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PROJECT-000 }

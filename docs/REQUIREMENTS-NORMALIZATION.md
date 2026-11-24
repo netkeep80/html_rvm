@@ -1,5 +1,7 @@
 # REQ-NORM-001 — нормализация требований по независимому аудиту
 
+Исторический протокол PR #12 (production 01.05). Ниже описан исходный normalization slice, не состояние migration-кандидата REQ-AUTH-001.
+
 ## 1. Цель
 
 Не менять принятые архитектурные решения, а сделать их формально атомарными и точнее трассируемыми до того, как семантика МО разрастётся. Исходные 16 S0 Requirements остаются **accepted/current** в этом Draft. Новые Requirements — параллельный **candidate normalized graph** с lifecycle `accepted=false,current=false,published=false`.
@@ -70,3 +72,11 @@ GOAL отвечает «зачем продукт существует», USER �
 4. проверяется отсутствие потери normative semantics по `legacy-to-atomic.json`.
 
 Нельзя выводить acceptance из CI/merge.
+
+## 9. REQ-AUTH-001 — предлагаемый authority graph
+
+[Issue #13](https://github.com/netkeep80/html_rvm/issues/13). 34 atomics заменяют ровно пять legacy compounds; historical accepted сохраняется. `supersedes` направлен от atomic к legacy (native requirement-v1, implicit Requirement source, Requirement target). Текущие `derives_from` перенесены на ARCH (PORT), PORT-WRITER (WRITE), WORK (PERSIST, дополнительно clause-level WRITE provenance ниже), PRODUCT (REF), PROJECT (TEST); READ и SNAP теперь ссылаются на PORT-READER. Историческая provenance остаётся в historical graph и supersedes; GOAL/USER relations остаются source/proposal trace, не current authority. Все current IDs имеют current-only путь к PRODUCT. Остальные candidate flags, normative text, priority и semantic mapping неизменны. Флаги в Draft описывают предлагаемый граф, не подтверждают авторскую приёмку. До отдельного exact audit и явного решения автора main не меняется.
+
+### P2-01 — сохранение current PERSIST → WRITE provenance
+
+Исходный PERSIST-001 derives_from WORK-001 и WRITE-001. Помимо сохранённого WORK anchor, current atomics получают точечные `derives_from`: INTENT → WRITE-TRIGGER (явный trigger); AUTH → WRITE-CAP (полномочие trusted host); FAIL → WRITE-FAIL (неизменность published state при отказе/conflict) и WRITE-CAP (отсутствие writer); HISTORY → WRITE-TRIGGER (нет автоматического сохранения промежуточных мутаций). NEUTRAL и DBMS не получают искусственных WRITE parents: их storage-neutral и архитектурная границы не являются writer behavior. Все пять дополнительных edges проверяются exact regression; historical provenance, normative statements и lifecycle не меняются. Independent delta-audit остаётся отдельным gate.
