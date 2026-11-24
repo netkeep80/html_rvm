@@ -8,6 +8,8 @@ relations:
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-WORK-001 }
   - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-WRITE-TRIGGER-001 }
+  - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-003 }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/REQUIREMENTS-NORMALIZATION.md" }

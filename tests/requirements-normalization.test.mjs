@@ -169,6 +169,24 @@ const anchors = {
   "HRVM-REF-001": "HRVM-PRODUCT-000",
   "HRVM-TEST-001": "HRVM-PROJECT-000"
 };
+// Clause-level migration of the accepted PERSIST -> WRITE parent (P2-01).
+const persistWriteParents = {
+  "HRVM-PERSIST-INTENT-001": [
+    "HRVM-WRITE-TRIGGER-001"
+  ],
+  "HRVM-PERSIST-AUTH-001": [
+    "HRVM-WRITE-CAP-001"
+  ],
+  "HRVM-PERSIST-FAIL-001": [
+    "HRVM-WRITE-FAIL-001",
+    "HRVM-WRITE-CAP-001"
+  ],
+  "HRVM-PERSIST-HISTORY-001": [
+    "HRVM-WRITE-TRIGGER-001"
+  ],
+  "HRVM-PERSIST-NEUTRAL-001": [],
+  "HRVM-PERSIST-DBMS-001": []
+};
 const edge = (predicate,id) => "  - predicates: [ " + predicate + " ]\n    target: { kind: requirement, id: " + id + " }";
 function requirementEdges(r) {
   return [...r.text.matchAll(/predicates: \[ ([^\]]+) \]\n\s+target: \{ kind: requirement, id: ([\w-]+) \}/g)]
@@ -208,6 +226,11 @@ test("REQ-AUTH: normative and non-migration fields exactly match production 01.0
         .replace(edge("supersedes",old)+(added?"\n"+edge("derives_from",anchor):""),edge("derives_from",old));
     }
     if (["HRVM-READ-001","HRVM-SNAP-001"].includes(r.id)) original=original.replace(edge("derives_from","HRVM-PORT-READER-001"),edge("derives_from","HRVM-PORT-001"));
+    for (const parent of persistWriteParents[r.id] ?? []) {
+      const addedEdge=edge("derives_from",parent)+"\n";
+      assert.ok(original.includes(addedEdge),r.id+" missing migrated parent "+parent);
+      original=original.replace(addedEdge,"");
+    }
     const bytes=Buffer.from(original,"utf8");
     const actual=createHash("sha1").update("blob "+bytes.length+"\0").update(bytes).digest("hex");
     assert.equal(actual,baseBlobs[r.id],r.id+" differs from exact baseline outside allowed migration");
@@ -231,6 +254,25 @@ test("REQ-AUTH: exact supersedes, no dangling or historical current derivation, 
   }
   for(const id of current) assert.ok(rooted(id),id+" lacks current-only provenance to PRODUCT");
   for(const id of ["HRVM-READ-001","HRVM-SNAP-001"]) assert.ok(requirementEdges(byId.get(id)).some(([p,t])=>p==="derives_from"&&t==="HRVM-PORT-READER-001"));
+});
+
+test("REQ-AUTH P2-01: exact clause-level current PERSIST to WRITE provenance", () => {
+  const persistIds=auditedMapping["HRVM-PERSIST-001"];
+  const writeIds=new Set(auditedMapping["HRVM-WRITE-001"]);
+  assert.deepEqual(Object.keys(persistWriteParents).sort(),[...persistIds].sort());
+  let count=0;
+  for (const id of persistIds) {
+    const r=byId.get(id);
+    assert.deepEqual(lifecycle(r),[true,true,false],id);
+    const parents=requirementEdges(r).filter(([p])=>p==="derives_from").map(([,t])=>t);
+    assert.ok(parents.includes("HRVM-WORK-001"),id);
+    const actual=parents.filter(t=>writeIds.has(t)).sort();
+    assert.deepEqual(actual,[...persistWriteParents[id]].sort(),id);
+    for (const target of actual) assert.deepEqual(lifecycle(byId.get(target)),[true,true,false],target);
+    count+=actual.length;
+  }
+  assert.equal(count,5);
+  // A WORK-only PERSIST graph is rooted, but fails this exact provenance check.
 });
 
 test("REQ-NORM: priority sidecar explicitly covers every native Requirement exactly once", () => {
