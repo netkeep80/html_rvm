@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-PERSIST-HISTORY-001
 normative: "### HRVM-PERSIST-HISTORY-001 — Persistent history MUST содержать только явно выбранный сохраняемый эффект и не включать автоматически весь поток промежуточных мутаций WorkingSession."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-PERSIST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-WORK-001 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-002 }
   - predicates: [ documents ]

@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-WRITE-TRIGGER-001
 normative: "### HRVM-WRITE-TRIGGER-001 — Постоянная запись результата исполнения MUST начинаться только после явного PersistenceIntent; рабочая мутация, timer или завершение исполнения сами по себе не являются trigger commit."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-WRITE-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PORT-WRITER-001 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-003 }
   - predicates: [ documents ]

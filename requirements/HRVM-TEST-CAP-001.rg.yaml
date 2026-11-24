@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-CAP-001
 normative: "### HRVM-TEST-CAP-001 — Contract suite MUST исполняемо проверять ограничения capability, предусмотренные соответствующим контрактом, включая недопустимость запрещённого эффекта без выданной capability."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-003 }
   - predicates: [ documents ]

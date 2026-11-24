@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-POLARITY-001
 normative: "### HRVM-TEST-POLARITY-001 — До заявления о соответствующей совместимости contract suite MUST содержать позитивные и негативные исполняемые проверки всех mapped behavioral obligations."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-TEST-001 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PROJECT-000 }

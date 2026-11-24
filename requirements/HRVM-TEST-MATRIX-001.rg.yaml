@@ -1,9 +1,9 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-MATRIX-001
 normative: "### HRVM-TEST-MATRIX-001 — Матрица C01–C26 MUST различать planned, partial и executed status без автоматического повышения статуса от наличия описания сценария."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-TEST-001 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-PROJECT-000 }

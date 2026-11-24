@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-READ-001
 normative: "### HRVM-TEST-READ-001 — До заявления о совместимости read-части DocumentPort/1 contract suite MUST исполняемо проверять pure read, snapshot isolation, stable identity и различимые read errors."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-001 }
   - predicates: [ documents ]

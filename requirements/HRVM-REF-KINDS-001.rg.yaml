@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-REF-KINDS-001
 normative: "### HRVM-REF-KINDS-001 — Семантика языка МО MUST однозначно различать literal, reference и invocation, чтобы одно JSON-значение не выбирало несколько режимов неявно."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-REF-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-GOAL-001 }
   - predicates: [ documents ]

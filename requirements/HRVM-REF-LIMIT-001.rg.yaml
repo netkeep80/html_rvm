@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-REF-LIMIT-001
 normative: "### HRVM-REF-LIMIT-001 — Resolver MUST обрабатывать циклы и чрезмерную глубину разрешения ссылок с конечным ограничением ресурсов, исключающим неограниченный обход."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-REF-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PRODUCT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-GOAL-001 }
   - predicates: [ documents ]

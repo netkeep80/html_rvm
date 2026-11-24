@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-TEST-WRITE-001
 normative: "### HRVM-TEST-WRITE-001 — До заявления о совместимости writer-части DocumentPort/1 contract suite MUST исполняемо проверять multi-document atomic commit, INVALID_PATCH и stale-base CONFLICT."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-TEST-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-003 }
   - predicates: [ documents ]

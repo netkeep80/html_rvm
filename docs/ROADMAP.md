@@ -15,7 +15,7 @@
 
 Исходные документы восстанавливаются из неизменяемого snapshot через провайдер, затем HTML RVM исполняет и самомодифицирует **временную рабочую JSON-модель в памяти**. Частые изменения рабочих значений (включая высокочастотные циклы) не приводят к физическим append/commit в DBMS. Только явная сущность сохранения МО может сформировать нейтральный ChangeRequest, исполняемый при отдельном разрешении trusted host/ChangeGateway. Схема этой сущности остаётся решением S2. Проверить C20–C26; не считать их пройденными в BOOT-001.
 
-## S1A — MemoryDocumentProvider read-only + Working JSON [DRAFT / NOT_ACCEPTED]
+## S1A — MemoryDocumentProvider read-only + Working JSON [COMPLETED / MERGED PR #5]
 
 - Один узкий implementation PR по [Issue #4](https://github.com/netkeep80/html_rvm/issues/4), в развитие принятых направлений [Issue #3](https://github.com/netkeep80/html_rvm/issues/3). [Точная граница S1A](S1A-MEMORY.md).
 - Независимый только read-only DocumentReader, immutable snapshot, runtime-проверка handle по provider instance, strict JSON clone, typed errors.
@@ -23,26 +23,35 @@
 - [Тестовый JSON Lab на GitHub Pages](S1A-PAGES.md) — включён в PR #5, без VM/DBMS: исходный JSON, отдельное рабочее состояние, ручные операции, миллион инкрементов, проверка изоляции и явный экспорт. По прямому указанию автора публикация GitHub Pages запускается **только из main** после merge. Публикация тестового сайта ≠ релиз или завершённый интерпретатор МО.
 - Не считать реализацию read-only провайдера доказательством полной совместимости DocumentPort/1.
 
-## S1A.1 — UX исправления JSON Lab [DRAFT / NOT_ACCEPTED]
+## S1A.1 — UX исправления JSON Lab [COMPLETED / MERGED PR #10]
 
 - [Issue #9](https://github.com/netkeep80/html_rvm/issues/9) по независимому UX-аудиту: BLOCK · P1=0, P2=4, P3=3. [Scope и модель состояния](S1A-UX.md).
 - Входной и рабочий черновики отличаются от активного snapshot/WorkingSession; неприменённый рабочий текст блокирует операции и экспорт. Видны конкретные before→after, активный snapshot и RAM lifetime.
-- Без полной Studio, новых UI-зависимостей, DBMS и изменения DocumentPort. Независимый браузерный повтор необходим перед UX acceptance.
+- Без полной Studio, новых UI-зависимостей, DBMS и изменения DocumentPort. Независимый Chromium повтор: PASS WITH FINDINGS, P1=0/P2=0/P3=1; оставшаяся ссылка исправлена в VERS-001.
 
-## VERS-001 — автоматическая версия XX.YY на GitHub Pages
+## VERS-001 — автоматическая версия XX.YY на GitHub Pages [COMPLETED / MERGED PR #8]
 
 - [Issue #7](https://github.com/netkeep80/html_rvm/issues/7), [PR #8](https://github.com/netkeep80/html_rvm/pull/8): версия от архитектурного baseline PR #2, `01.00` и счётчик обычных двухродительских merge в main (после PR #10 `01.03`; следующий merge увеличивает YY).
 - [Полный протокол](VERSIONING.md): проверка точной Git-истории, отдельный `VERSION` artifact и видимая версия в шапке/футере сайта.
 - Pages workflow пересчитывает номер и публикует при **каждом** main push, даже docs-only. Версия — техническая метка сборки, а не свидетельство готовой VM или DBMS.
 
-## REQ-NORM-001 — нормализация требований [DRAFT / NOT_ACCEPTED]
+## REQ-NORM-001 — нормализация требований [COMPLETED / MERGED PR #12]
 
 - [Issue #11](https://github.com/netkeep80/html_rvm/issues/11): requirements-only срез по независимому аудиту Вигерса/Битти, без изменения runtime.
-- Вводится candidate graph `GOAL → USER → atomic`; в первом срезе атомизируются `PORT / WRITE / PERSIST / REF / TEST`. Исходные 16 accepted S0 остаются authority до отдельной миграционной приёмки.
+- Введён candidate graph `GOAL → USER → atomic`; в первом срезе атомизированы `PORT / WRITE / PERSIST / REF / TEST`. В production 01.05 исходные 16 accepted S0 остаются authority до отдельной миграционной приёмки.
 - [Метод нормализации](REQUIREMENTS-NORMALIZATION.md), [glossary](GLOSSARY.md), explicit priority sidecar и строгая семантика `verified_by`.
 - Перед authority migration обязателен независимый read-only requirements audit; CI/merge не означают acceptance.
 
-## S1B+ — Writer/интерпретатор [PLANNED]
+## REQ-AUTH-001 — authority migration [DRAFT / AUTHOR ACCEPTANCE PENDING]
+
+- [Issue #13](https://github.com/netkeep80/html_rvm/issues/13): только lifecycle и relations для 34 replacements пяти compound; 45 current / 5 historical / 12 candidates / 0 published / 62 IDs в предлагаемом графе.
+- Exact CI и независимый аудит, затем отдельная авторская приёмка; до merge production authority остаётся 01.05. Runtime не меняется.
+
+## S1B — семантическое ядро МО / executable RVM [NEXT / PLANNED]
+
+- Literal / reference / invocation, entity IDs, JSON paths, context resolver, read target vs mutable lvalue, missing vs null, cycles/resource bounds, deterministic execution и golden fixtures jsonRVM/phprvm. Отдельный будущий scope, без реализации в REQ-AUTH-001.
+
+## S1B+ — Writer [PLANNED, после семантического ядра]
 
 - Optional DocumentWriter с атомарным multi-document CAS/RFC6902 — отдельный проектный срез, без прямого DBMS API в VM.
 - Самостоятельные тесты C04–C07, C17 iframe/Worker, границы строгого JSON при commit.

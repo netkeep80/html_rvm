@@ -1,10 +1,12 @@
 format: repo-guard/requirement-v1
 id: HRVM-PORT-DATA-001
 normative: "### HRVM-PORT-DATA-001 — DocumentPort/1 MUST выражать документы как JSONValue, а предложения изменений writer как RFC 6902 JSON Patch."
-lifecycle: { accepted: false, current: false, published: false }
+lifecycle: { accepted: true, current: true, published: false }
 relations:
-  - predicates: [ derives_from ]
+  - predicates: [ supersedes ]
     target: { kind: requirement, id: HRVM-PORT-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-ARCH-001 }
   - predicates: [ derives_from ]
     target: { kind: requirement, id: HRVM-USER-004 }
   - predicates: [ documents ]
