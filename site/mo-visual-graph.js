@@ -43,18 +43,26 @@ export function mountVisualGraph({studio,getSelected,select,run}){
  function label(kind,value){return {kind,value:kind==="index"?(value.trim()===""?NaN:Number(value)):value};}
  function create(owner,target){run(()=>studio.action({op:"createRelation",id:freshVisualId(studio.state,"P"),owner,label:label($("graph-label-kind").value,$("graph-label-value").value),target}));}
  function changeLink(g,target){if(g.port==="create")create(g.from,target);else run(()=>studio.action(g.port==="owner"?{op:"moveRelation",id:g.from.id,owner:target}:{op:"rebindRelation",id:g.from.id,target}));}
- svg.addEventListener("pointerdown",e=>{if(e.button!==0&&e.button!==1)return;e.preventDefault();const hit=fromElement(e.target),port=e.target.getAttribute("data-port"),p=point(e);
+ // Capture is a delivery aid, not the gesture's lifetime authority. A browser can
+ // release it while the button is still held. Continue tracking the same pointer
+ // at document level; only up/cancel/Escape/blur or a lost button ends the gesture.
+ function cancelGesture(){const g=gesture;if(!g)return;gesture=null;if(svg.hasPointerCapture(g.pointerId))svg.releasePointerCapture(g.pointerId);draw();}
+ svg.addEventListener("pointerdown",e=>{if(gesture||!e.isPrimary||(e.button!==0&&e.button!==1))return;e.preventDefault();const hit=fromElement(e.target),port=e.target.getAttribute("data-port"),p=point(e);
   if(e.button===0&&hit&&mode!=="pan"){if(port){gesture={type:"link",port,from:hit,to:p};}else{gesture={type:"move",from:hit,start:p,origin:{...positions.get(key(hit))}};select(hit);}}
   else{gesture={type:"pan",start:screenPoint(e),origin:{...camera}};}
-  svg.setPointerCapture(e.pointerId);draw();
+  gesture.pointerId=e.pointerId;gesture.buttonMask=e.button===0?1:4;
+  try{svg.setPointerCapture(e.pointerId);}catch{/* document delivery remains active */}
+  draw();
  });
- svg.addEventListener("pointermove",e=>{if(!gesture)return;if(gesture.type==="move"){const p=point(e);positions.set(key(gesture.from),{x:gesture.origin.x+p.x-gesture.start.x,y:gesture.origin.y+p.y-gesture.start.y});}else if(gesture.type==="pan"){const p=screenPoint(e);camera.x=gesture.origin.x+p.x-gesture.start.x;camera.y=gesture.origin.y+p.y-gesture.start.y;}else gesture.to=point(e);draw();});
- svg.addEventListener("pointerup",e=>{const g=gesture;gesture=null;if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);if(g?.type==="link"){const target=fromElement(document.elementFromPoint(e.clientX,e.clientY));if(target&&lookup(target))changeLink(g,target);}draw();});
- svg.addEventListener("pointercancel",()=>{gesture=null;draw();});svg.addEventListener("lostpointercapture",()=>{gesture=null;draw();});
+ document.addEventListener("pointermove",e=>{if(!gesture||gesture.pointerId!==e.pointerId)return;if(!(e.buttons&gesture.buttonMask)){cancelGesture();return;}if(gesture.type==="move"){const p=point(e);positions.set(key(gesture.from),{x:gesture.origin.x+p.x-gesture.start.x,y:gesture.origin.y+p.y-gesture.start.y});}else if(gesture.type==="pan"){const p=screenPoint(e);camera.x=gesture.origin.x+p.x-gesture.start.x;camera.y=gesture.origin.y+p.y-gesture.start.y;}else gesture.to=point(e);draw();},true);
+ document.addEventListener("pointerup",e=>{if(!gesture||gesture.pointerId!==e.pointerId||(e.buttons&gesture.buttonMask))return;const g=gesture;gesture=null;if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);if(g.type==="link"){const el=document.elementFromPoint(e.clientX,e.clientY),target=svg.contains(el)?fromElement(el):null;if(target&&lookup(g.from)&&lookup(target))changeLink(g,target);}draw();},true);
+ document.addEventListener("pointercancel",e=>{if(gesture?.pointerId===e.pointerId)cancelGesture();},true);
+ window.addEventListener("blur",cancelGesture);
+ document.addEventListener("visibilitychange",()=>{if(document.hidden)cancelGesture();});
  function zoom(f,at={x:450,y:280}){const z=Math.max(.25,Math.min(4,camera.z*f));camera.x=at.x-(at.x-camera.x)*z/camera.z;camera.y=at.y-(at.y-camera.y)*z/camera.z;camera.z=z;draw();}
  svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY<0?1.15:1/1.15,screenPoint(e));},{passive:false});
- svg.addEventListener("keydown",e=>{if(e.key==="Escape"){gesture=null;draw();}if(e.key==="Enter"||e.key===" "){const hit=fromElement(e.target);if(hit){e.preventDefault();select(hit);[...layer.querySelectorAll("[data-key]")].find(g=>g.dataset.key===key(hit))?.focus();}}});
- document.addEventListener("keydown",e=>{if(e.key==="Escape"&&gesture){gesture=null;draw();}});
+ svg.addEventListener("keydown",e=>{if(e.key==="Escape")cancelGesture();if(e.key==="Enter"||e.key===" "){const hit=fromElement(e.target);if(hit){e.preventDefault();select(hit);[...layer.querySelectorAll("[data-key]")].find(g=>g.dataset.key===key(hit))?.focus();}}});
+ document.addEventListener("keydown",e=>{if(e.key==="Escape")cancelGesture();});
  $("graph-mode").onchange=e=>{mode=e.target.value;};$("graph-zoom-in").onclick=()=>zoom(1.25);$("graph-zoom-out").onclick=()=>zoom(.8);
  $("graph-layout").onclick=()=>{autoLayout();fit();draw();};
  options($("graph-node-kind"),["entity","object","array","string","number","boolean","null"]);options($("graph-label-kind"),["role","key","index","tag"]);
@@ -68,5 +76,5 @@ export function mountVisualGraph({studio,getSelected,select,run}){
  function inspector(){const e=getSelected(),r=lookup(e);$("graph-selected").textContent=r?fmt(e):"Выберите N или P";for(const id of ["graph-delete","graph-root","graph-save","graph-create-unbound","graph-edit-kind","graph-edit-value"])$(id).disabled=!r;$("graph-unbind").disabled=!r||e.sort!=="P";if(!r){$("graph-edit-kind").replaceChildren();$("graph-edit-value").value="";return;}
   const isN=e.sort==="N";options($("graph-edit-kind"),isN?["entity","object","array","string","number","boolean","null"]:["role","key","index","tag"]);$("graph-edit-kind").value=isN?r.kind:r.label.kind;$("graph-edit-value").value=isN?(r.kind==="string"?r.payload:r.payload===null?"":JSON.stringify(r.payload)):String(r.label.value);$("graph-root").textContent=studio.state.roots.some(x=>equal(x,e))?"Убрать корень":"Добавить корень";
  }
- autoLayout();fit();return {render(){draw();inspector();},reset(){gesture=null;autoLayout();fit();}};
+ autoLayout();fit();return {render(){draw();inspector();},reset(){cancelGesture();autoLayout();fit();}};
 }

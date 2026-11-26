@@ -31,7 +31,7 @@ try{
  for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('#graph-layer [data-key]')"))break;await sleep(100);}
  // Wait for actual layout/compositor frames after scroll or SVG replacement, not for a guessed timeout.
  const frame=()=>evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r(true))))");
- await evaluate("window.__v1PointerTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','gotpointercapture','lostpointercapture'])document.addEventListener(type,e=>{const at=document.elementFromPoint(e.clientX,e.clientY);window.__v1PointerTrace.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,port:e.target.getAttribute?.('data-port'),key:e.target.closest?.('[data-key]')?.dataset.key,hit:at?.closest?.('[data-key]')?.dataset.key,hitPort:at?.getAttribute?.('data-port')});if(window.__v1PointerTrace.length>30)window.__v1PointerTrace.shift();},true);true");
+ await evaluate("window.__v1PointerTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','gotpointercapture','lostpointercapture'])document.addEventListener(type,e=>{const at=document.elementFromPoint(e.clientX,e.clientY);window.__v1PointerTrace.push({type,id:e.pointerId,buttons:e.buttons,trusted:e.isTrusted,x:e.clientX,y:e.clientY,port:e.target.getAttribute?.('data-port'),key:e.target.closest?.('[data-key]')?.dataset.key,hit:at?.closest?.('[data-key]')?.dataset.key,hitPort:at?.getAttribute?.('data-port')});if(window.__v1PointerTrace.length>30)window.__v1PointerTrace.shift();},true);true");
  const raw=()=>evaluate("document.getElementById('lossless').textContent");
  const state=async()=>JSON.parse(await raw());
  const find=(s,id)=>s.relations.find(r=>r.id===id);
@@ -88,6 +88,22 @@ try{
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
  await click(await coords("P","p1"));await press("graph-create-unbound");check(find(await state(),"p2")?.bound===false,"create unbound P");
  await shot("04-unbound");
+ // Regression: real input with deliberate capture release after pointerdown.
+ await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
+ const start=await coords("P","a","create"),end=await coords("P","b");
+ await mouse("mouseMoved",start,0);await frame();await mouse("mousePressed",start,1);await frame();
+ await evaluate("(()=>{const svg=document.getElementById('mo-graph'),last=window.__v1PointerTrace.findLast(e=>e.type==='pointerdown');if(svg.hasPointerCapture(last.id))svg.releasePointerCapture(last.id);return true;})()");
+ await mouse("mouseMoved",end,1);await frame();await mouse("mouseReleased",end,0);await frame();
+ check(same(find(await state(),"p3")?.owner,["P","a"])&&same(find(await state(),"p3")?.target,["P","b"]),"capture loss does not cancel a valid P/P drag");
+ const cancelBefore=await raw();
+ const cancelStart=await coords("P","a","create");
+ const cancelEnd=await evaluate("(()=>{const b=document.getElementById('mo-graph').getBoundingClientRect();return {x:b.right-20,y:b.bottom-20};})()");
+ await drag(cancelStart,cancelEnd);check(await raw()===cancelBefore,"blank drop leaves state exact");
+ await mouse("mouseMoved",cancelStart,0);await frame();await mouse("mousePressed",cancelStart,1);await frame();
+ await send("Input.dispatchKeyEvent",{type:"keyDown",key:"Escape",code:"Escape",windowsVirtualKeyCode:27});await send("Input.dispatchKeyEvent",{type:"keyUp",key:"Escape",code:"Escape",windowsVirtualKeyCode:27});
+ await mouse("mouseMoved",end,1);await frame();await mouse("mouseReleased",end,0);await frame();
+ check(await raw()===cancelBefore,"Escape cancels link without mutation");
+
  await click(await coords("P","p1"));await set("graph-edit-value","renamed");await press("graph-save");
  check(find(await state(),"p1")?.label.value==="renamed","mouse relabel P");
  await press("graph-root");check((await state()).roots.some(e=>same(e,["P","p1"])),"root P added");
