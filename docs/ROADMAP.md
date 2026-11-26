@@ -1,5 +1,19 @@
 # План проекта и контроль непрерывности
 
+## Актуальный маршрут — 26.11.2026 · авторская дельта
+
+Источник: [Issue #18 / 7202378622](https://github.com/netkeep80/html_rvm/issues/18#issuecomment-7202378622), [handoff #29 / 7202383209](https://github.com/netkeep80/html_rvm/issues/29#issuecomment-7202383209). Эта дельта задаёт порядок следующих работ; исторические результаты, RESEARCH-PLAN-R2, D1/A/B OPEN/BLOCK, G05-E, I4/I5 и исходные доказательные обязательства сохраняются. Старые статусы ниже — исторические записи, не актуальный порядок выполнения.
+
+- REQ-AUTH-001: PR #14 MERGED; Reference Executor R0: PR #26 MERGED; Studio R0: PR #28 MERGED, Pages SUCCESS, отдельный independent PASS #28 не записан.
+- V1: [PR #30](https://github.com/netkeep80/html_rvm/pull/30), exact HEAD `40a0e42a4fddab177eb85009cc9c04bba002dcf4`; [независимый delta-аудит PASS 0/0/0](https://github.com/netkeep80/html_rvm/pull/30#issuecomment-7203016078), [AUTHOR_ACCEPTED](https://github.com/netkeep80/html_rvm/pull/30#issuecomment-7203027696), MERGED `ec60ba97423d20dc7ed32b8c67abf48fcaf287f5`; публикация Pages отдельным workflow из main. Scope — структурный редактор R0, не executable language. V2/V3 не начаты.
+- V2: граф / обычная JSON-проекция V / lossless codec G / инспектор; корректная синхронизация и границы изменения. Предусмотреть отдельную будущую компактную исполняемую проекцию C, не замораживая грамматику.
+- V3: наблюдение реальных математических переходов, Pi/Omega и committed history; rollback не inverse execution. Минимальные практические срезы, отдельные gates V2 и V3.
+- S1B-PARITY-COMPACT (PC0–PC4): следующий обязательный substantive milestone после V1–V3. [Протокол и точный исходный корпус](S1B-PARITY-COMPACT.md). PC0 baseline/oracle; PC1 минимальная исполняемая проекция; PC2 контексты и метапрограммирование; PC3 реальные программы, статистика, отчёты и host boundaries; PC4 полная сравнительная приёмка. Подчинить D2b–D2d, D3, D4, A0 практическим доказательствам по этим срезам.
+- V4/V5: сравнение и оптимизация носителей только после PC4 с независимой и авторской приёмкой. Не запускать новые exhaustive carrier matrices.
+- S1B+, S2, S3, S4: сохраняются архитектурные границы, DocumentPort/1, explicit persistence и trusted host authorization; новые реализации по отдельным принятым scope.
+
+**Критерий успеха:** при равной необходимой функциональности весь сопоставимый исполняемый JSON-корпус C должен быть строго меньше по minified UTF-8 и понятнее исторического jsonRVM. G, скрытые JS-вычисления и списки элементарных R0-команд не заменяют C. Каждый рост и intentional difference требуют авторского решения. Ни V1–V3, ни CI PASS не означают достижения этого критерия.
+
 ## Точка BOOT-001
 
 Репозиторий создан с LICENSE; техническая реализация отсутствует. Зафиксирована авторски принятая архитектура двух независимых систем и проект DocumentPort/1 (runtime ещё не реализован). Решение S0: [BOOTSTRAP-ACCEPTANCE.md](BOOTSTRAP-ACCEPTANCE.md). Ссылки на чужие репозитории не означают перенос их кода.
