@@ -16,8 +16,9 @@ export function mountVisualGraph({studio,getSelected,select,run}){
  let camera={x:0,y:0,z:1}, gesture=null, mode="select";
  const records=()=>visualRecords(studio.state);
  const lookup=e=>e&&(e.sort==="N"?studio.state.nodes:studio.state.relations).get(e.id);
- function autoLayout(){positions.clear();const counts={N:0,P:0};for(const e of records()){const i=counts[e.sort]++;positions.set(key(e),{x:(e.sort==="N"?120:360)+Math.floor(i/5)*480,y:75+(i%5)*115});}}
- function placeMissing(){const live=new Set(records().map(key));for(const k of positions.keys())if(!live.has(k))positions.delete(k);for(const e of records())if(!positions.has(key(e))){let i=0,p;do{p={x:(e.sort==="N"?120:360)+Math.floor(i/5)*480,y:75+(i%5)*115};i++;}while([...positions.values()].some(q=>Math.abs(q.x-p.x)<100&&Math.abs(q.y-p.y)<85));positions.set(key(e),p);}}
+ function autoLayout(){positions.clear();const counts={N:0,P:0};for(const e of records()){const i=counts[e.sort]++;positions.set(key(e),{x:(e.sort==="N"?120:360)+Math.floor(i/5)*480,y:65+(i%5)*105});}}
+ function fit(){const maxX=Math.max(900,...[...positions.values()].map(p=>p.x+130));camera={x:0,y:0,z:Math.min(1,900/maxX)};}
+ function placeMissing(){const live=new Set(records().map(key));for(const k of positions.keys())if(!live.has(k))positions.delete(k);for(const e of records())if(!positions.has(key(e))){let i=0,p;do{p={x:(e.sort==="N"?120:360)+Math.floor(i/5)*480,y:65+(i%5)*105};i++;}while([...positions.values()].some(q=>Math.abs(q.x-p.x)<100&&Math.abs(q.y-p.y)<85));positions.set(key(e),p);}}
  function point(event){const p=new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());return {x:(p.x-camera.x)/camera.z,y:(p.y-camera.y)/camera.z};}
  function screenPoint(event){return new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());}
  function text(parent,x,y,value,cls=""){parent.append(svgEl("text",{x,y,class:cls,"text-anchor":"middle","pointer-events":"none"},value));}
@@ -39,7 +40,7 @@ export function mountVisualGraph({studio,getSelected,select,run}){
   if(gesture?.type==="link"){const p=positions.get(key(gesture.from));if(p&&gesture.to)layer.append(svgEl("path",{d:"M "+p.x+" "+p.y+" L "+gesture.to.x+" "+gesture.to.y,class:"mo-preview"}));}
  }
  function fromElement(el){const g=el?.closest?.("[data-key]");if(!g)return null;const [sort,id]=JSON.parse(g.dataset.key);return ep(sort,id);}
- function label(kind,value){return {kind,value:kind==="index"?Number(value):value};}
+ function label(kind,value){return {kind,value:kind==="index"?(value.trim()===""?NaN:Number(value)):value};}
  function create(owner,target){run(()=>studio.action({op:"createRelation",id:freshVisualId(studio.state,"P"),owner,label:label($("graph-label-kind").value,$("graph-label-value").value),target}));}
  function changeLink(g,target){if(g.port==="create")create(g.from,target);else run(()=>studio.action(g.port==="owner"?{op:"moveRelation",id:g.from.id,owner:target}:{op:"rebindRelation",id:g.from.id,target}));}
  svg.addEventListener("pointerdown",e=>{if(e.button!==0&&e.button!==1)return;e.preventDefault();const hit=fromElement(e.target),port=e.target.getAttribute("data-port"),p=point(e);
@@ -52,10 +53,10 @@ export function mountVisualGraph({studio,getSelected,select,run}){
  svg.addEventListener("pointercancel",()=>{gesture=null;draw();});svg.addEventListener("lostpointercapture",()=>{gesture=null;draw();});
  function zoom(f,at={x:450,y:280}){const z=Math.max(.25,Math.min(4,camera.z*f));camera.x=at.x-(at.x-camera.x)*z/camera.z;camera.y=at.y-(at.y-camera.y)*z/camera.z;camera.z=z;draw();}
  svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY<0?1.15:1/1.15,screenPoint(e));},{passive:false});
- svg.addEventListener("keydown",e=>{if(e.key==="Escape"){gesture=null;draw();}if(e.key==="Enter"||e.key===" "){const hit=fromElement(e.target);if(hit){e.preventDefault();select(hit);}}});
+ svg.addEventListener("keydown",e=>{if(e.key==="Escape"){gesture=null;draw();}if(e.key==="Enter"||e.key===" "){const hit=fromElement(e.target);if(hit){e.preventDefault();select(hit);[...layer.querySelectorAll("[data-key]")].find(g=>g.dataset.key===key(hit))?.focus();}}});
  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&gesture){gesture=null;draw();}});
  $("graph-mode").onchange=e=>{mode=e.target.value;};$("graph-zoom-in").onclick=()=>zoom(1.25);$("graph-zoom-out").onclick=()=>zoom(.8);
- $("graph-layout").onclick=()=>{autoLayout();camera={x:0,y:0,z:1};draw();};
+ $("graph-layout").onclick=()=>{autoLayout();fit();draw();};
  options($("graph-node-kind"),["entity","object","array","string","number","boolean","null"]);options($("graph-label-kind"),["role","key","index","tag"]);
  function payload(kind,raw){if(["null","object","array"].includes(kind))return null;if(kind==="string")return raw;if(kind==="number"){if(raw.trim()==="")throw Error("Введите число");return Number(raw);}if(kind==="boolean"){if(raw!=="true"&&raw!=="false")throw Error("Введите true или false");return raw==="true";}return raw.trim()===""?null:JSON.parse(raw);}
  $("graph-create-node").onclick=()=>run(()=>{const kind=$("graph-node-kind").value,id=freshVisualId(studio.state,"N");return studio.action({op:"createNode",id,kind,payload:payload(kind,$("graph-node-payload").value)});});
@@ -67,5 +68,5 @@ export function mountVisualGraph({studio,getSelected,select,run}){
  function inspector(){const e=getSelected(),r=lookup(e);$("graph-selected").textContent=r?fmt(e):"Выберите N или P";for(const id of ["graph-delete","graph-root","graph-save","graph-create-unbound","graph-edit-kind","graph-edit-value"])$(id).disabled=!r;$("graph-unbind").disabled=!r||e.sort!=="P";if(!r){$("graph-edit-kind").replaceChildren();$("graph-edit-value").value="";return;}
   const isN=e.sort==="N";options($("graph-edit-kind"),isN?["entity","object","array","string","number","boolean","null"]:["role","key","index","tag"]);$("graph-edit-kind").value=isN?r.kind:r.label.kind;$("graph-edit-value").value=isN?(r.kind==="string"?r.payload:r.payload===null?"":JSON.stringify(r.payload)):String(r.label.value);$("graph-root").textContent=studio.state.roots.some(x=>equal(x,e))?"Убрать корень":"Добавить корень";
  }
- autoLayout();return {render(){draw();inspector();},reset(){gesture=null;autoLayout();camera={x:0,y:0,z:1};}};
+ autoLayout();fit();return {render(){draw();inspector();},reset(){gesture=null;autoLayout();fit();}};
 }
