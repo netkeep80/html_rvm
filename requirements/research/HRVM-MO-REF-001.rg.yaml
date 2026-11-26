@@ -1,0 +1,19 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-REF-001
+normative: "### HRVM-MO-REF-001 — Исследовательский Reference Executor R0 MUST непосредственно исполнять авторски принятую кандидатную семантику МО N/P: first-class relation occurrences, relation-to-relation endpoints, lifetime-unique occurrence identity, атомарные переходы с Pi/Omega, plain-JSON projection и отдельную lossless JSON serialization, оставаясь прозрачным oracle без заявления production/native-carrier conformance."
+lifecycle: { accepted: true, current: true, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-REF-IDENTITY-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-PROJECT-000 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "src/mo-core.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "src/mo-json.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "src/mo-reference.js" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/mo-reference.test.mjs" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/MO-REFERENCE-R0.md" }
