@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {freshVisualId,visualRecords} from "../site/mo-visual-graph.js";
+import {createMOState,losslessMOObject} from "../src/mo-reference.js";
 import {createStudio,examples} from "../site/mo-studio.js";
+import {locateVPath,projectionOccurrences,losslessLocators,syncSnapshot} from "../site/mo-projection-sync.js";
 import {readFileSync,existsSync,mkdtempSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -32,7 +34,7 @@ test("MO Studio atomic reject and invalid imports preserve full state",()=>{
 test("MO Studio Pages artifact includes actual R0 modules and accessible entry",()=>{
  const d=mkdtempSync(join(tmpdir(),"mo-studio-"));
  try{const r=buildPages(join(d,"dist"),{version:"01.07"});
- for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","site/mo-visual-graph.js","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
+ for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","site/mo-visual-graph.js","site/mo-projection-sync.js","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
  assert.match(readFileSync(join(r.destination,"site/index.html"),"utf8"),/href="\.\/mo-studio.html"/);
  for(const f of ["site/mo-studio.js","site/mo-studio-ui.js"])execFileSync(process.execPath,["--check",join(r.destination,f)]);
  }finally{rmSync(d,{recursive:true,force:true});}
@@ -46,4 +48,43 @@ test("visual identities are typed and allocator excludes dead IDs",()=>{
  assert.equal(s.action({op:"createNode",id,kind:"entity"}).outcome.status,"OK");
  assert.equal(s.action({op:"deleteNode",id}).outcome.status,"OK");
  assert.notEqual(freshVisualId(s.state,"N"),id);
+});
+
+test("V2 sync maps canonical V paths to typed N/P and exact G locators without mutation",()=>{
+ const s=createStudio();const before=s.lossless(),root=s.state.roots[0];
+ const located=locateVPath(s.state,root,["counter"]);assert.equal(located.ok,true);assert.equal(located.node.sort,"N");assert.equal(located.relation.sort,"P");
+ const nodeSync=syncSnapshot(s.state,root,located.node);assert.deepEqual(nodeSync.v.paths,[["counter"]]);assert.deepEqual(nodeSync.editablePath,["counter"]);assert.equal(nodeSync.canonical.ok,true);
+ const relSync=syncSnapshot(s.state,root,located.relation);assert.deepEqual(relSync.v.paths,[["counter"]]);assert.deepEqual(relSync.editablePath,["counter"]);
+ assert.equal(losslessLocators(s.state,located.node).record[0],"nodes");assert.equal(losslessLocators(s.state,located.relation).record[0],"relations");
+ assert.equal(s.lossless(),before);
+});
+test("V2 sync exposes sharing multiplicity, cycle obstruction and typed identity",()=>{
+ const s=createStudio(examples.graph()),root=s.state.roots[0],before=s.lossless();
+ const shared=syncSnapshot(s.state,root,{sort:"N",id:"value"});assert.equal(shared.v.ok,true);assert.deepEqual(shared.v.paths,[["a"],["b"]]);assert.equal(shared.canonical.ok,false);assert.equal(shared.editablePath,null);
+ assert.equal(s.action({op:"createNode",id:"a",kind:"entity"}).outcome.status,"OK");
+ const n=losslessLocators(s.state,{sort:"N",id:"a"}),p=losslessLocators(s.state,{sort:"P",id:"a"});assert.equal(n.record[0],"nodes");assert.equal(p.record[0],"relations");assert.notDeepEqual(n.record,p.record);
+ assert.equal(s.action({op:"createRelation",id:"cyc",owner:{sort:"N",id:"root"},label:{kind:"key",value:"self"},target:{sort:"N",id:"root"}}).outcome.status,"OK");
+ const cyc=syncSnapshot(s.state,root,{sort:"P",id:"cyc"});assert.equal(cyc.v.ok,false);assert.equal(cyc.v.diagnostic,"JSON_CYCLE");assert.equal(cyc.g.record[0],"relations");
+ assert.notEqual(s.lossless(),before);
+});
+
+test("V2 G locators dereference exact mixed-case R0 lossless entries",()=>{
+ const s=createStudio(createMOState());
+ for(const a of [
+  {op:"createNode",id:"A",kind:"number",payload:1},
+  {op:"createNode",id:"a",kind:"number",payload:2},
+  {op:"createRelation",id:"A",owner:{sort:"N",id:"A"},label:{kind:"role",value:"upper"},target:{sort:"N",id:"a"}},
+  {op:"createRelation",id:"a",owner:{sort:"N",id:"a"},label:{kind:"role",value:"lower"},target:{sort:"N",id:"A"}},
+  {op:"setRoots",roots:[{sort:"N",id:"A"},{sort:"P",id:"A"}]}
+ ]) assert.equal(s.action(a).outcome.status,"OK");
+ const g=losslessMOObject(s.state);
+ const at=(obj,path)=>path.reduce((v,k)=>v[k],obj);
+ for(const selected of [{sort:"N",id:"A"},{sort:"N",id:"a"},{sort:"P",id:"A"},{sort:"P",id:"a"}]){
+  const loc=losslessLocators(s.state,selected);
+  assert.equal(at(g,loc.record).id,selected.id);
+  assert.equal(at(g,loc.used),selected.id);
+  for(const root of loc.roots)assert.deepEqual(at(g,root),[selected.sort,selected.id]);
+ }
+ assert.deepEqual(g.used.N.slice(-2),["A","a"]);
+ assert.deepEqual(g.used.P,["A","a"]);
 });
