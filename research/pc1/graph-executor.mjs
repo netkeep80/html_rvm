@@ -38,8 +38,9 @@ export function parseStrict(source) {
 }
 
 export function complete(domains, compatible=()=>true) {
+  const unique=terms=>terms.filter((a,i)=>terms.findIndex(b=>Object.is(a,b)||(a&&b&&['N','P'].includes(a.sort)&&a.sort===b.sort&&a.id===b.id))===i);
   const out=[];
-  for(const o of domains.O)for(const r of domains.R)for(const s of domains.S)
+  for(const o of unique(domains.O))for(const r of unique(domains.R))for(const s of unique(domains.S))
     if(compatible(o,r,s))out.push({O:o,R:r,S:s});
   if(out.length!==1)fail(out.length?'AMBIGUOUS_COMPLETION':'NO_COMPLETION');
   return out[0];
@@ -155,7 +156,7 @@ export function subjectivate(source,{profile='body',defaults='context',environme
     return e;
   }
   // Definitions are explicit inputs, counted separately; no executable host function accepted.
-  for(const [name,d] of Object.entries(definitions)){
+  for(const [name,d] of Object.entries(definitions).sort((a,b)=>compare(a[0],b[0]))){
     if(prim.includes(name))fail('DEFINITION_COLLISION');
     if(d.kind==='table'){
       if(!object(d.entries))fail('TABLE_FORM');
@@ -287,7 +288,7 @@ export function execute(state,{limit=500}={}){
   }
 }
 
-export function objectivate(state){
+export function objectivate(state,{packageImage=false}={}){
   const g=graph(state),root=state.roots[0],p=g.payload(root).profile;
   function operand(t){
     const k=g.payload(t).kind;
@@ -319,12 +320,26 @@ export function objectivate(state){
     return v;
   }
   const e=g.role(root,'body');
+  let source;
   if(p==='rose'){
     const entries=g.children(e,'key').map(([,r])=>[g.payload(g.role(r.target,'R')).name,r.label.value]);
     if(new Set(entries.map(([k])=>k)).size!==entries.length)fail('ROSE_CONFLICT');
-    return Object.fromEntries(entries);
-  }
-  return body(e);
+    source=Object.fromEntries(entries);
+  }else source=body(e);
+  if(!packageImage)return source;
+  const dict=g.role(root,'dictionary'),env=g.role(root,'environment');
+  const definitions=Object.fromEntries(g.children(dict,'key').filter(([,r])=>g.tag(r.target)!=='primitive').map(([,r])=>{
+    const d=r.target,name=r.label.value,kind=g.tag(d);
+    if(kind==='table')return [name,{kind,entries:Object.fromEntries(g.children(d,'key').map(([,row])=>[row.label.value,g.read(row.target)]))}];
+    if(kind==='closure')return [name,{kind,capture:g.read(g.role(d,'capture')),body:body(g.role(d,'body'))}];
+    fail('DEFINITION_PROJECTION');
+  }));
+  const result={source,profile:p,defaults:g.payload(root).defaults,environment:{version:g.read(g.role(env,'version')),meta:g.read(g.role(env,'meta'))},definitions};
+  // This deliberately narrow image test includes identity and used-ID history.
+  // It never treats a value-only projection as a lossless arbitrary graph codec.
+  const reconstructed=subjectivate(JSON.stringify(source),result);
+  if(serializeLosslessMO(reconstructed.state)!==serializeLosslessMO(state))fail('OUTSIDE_CANONICAL_PACKAGE_IMAGE');
+  return result;
 }
 
 export function detached(state){return deserializeLosslessMO(JSON.parse(serializeLosslessMO(state)));}
