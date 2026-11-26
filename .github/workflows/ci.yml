@@ -31,6 +31,15 @@ jobs:
         run: node tools/smoke-mo-visual.mjs
       - name: V2 synchronized V/G inspector Chromium interactions
         run: node tools/smoke-mo-v2.mjs
+      - name: V3 committed execution observer Chromium interactions
+        run: node tools/smoke-mo-v3.mjs
+      - name: Retain V3 execution evidence (exact HEAD)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mo-v3-evidence
+          path: mo-v3-evidence/
+          if-no-files-found: warn
       - name: Retain V2 synchronization evidence (exact HEAD)
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

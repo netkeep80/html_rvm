@@ -62,9 +62,10 @@ test("Pages artifact includes all modules, exact version marker and root redirec
     const out = join(temp, "dist");
     const commit = "a".repeat(40);
     const result = buildPages(out, { commit, branch: "main", version: "01.04" });
-    assert.equal(result.files.length, 20);
+    assert.equal(result.files.length, 21);
     assert.ok(result.files.includes("site/mo-visual-graph.js"));
     assert.ok(result.files.includes("site/mo-projection-sync.js"));
+    assert.ok(result.files.includes("site/mo-transition-observer.js"));
     for (const relative of result.files) assert.equal(existsSync(join(out, relative)), true, relative);
     assert.match(readFileSync(join(out, "index.html"), "utf8"), /url=\.\/site\//);
     const meta = JSON.parse(readFileSync(join(out, "site/build-info.json"), "utf8"));
@@ -100,6 +101,6 @@ test("Pages workflow deploys main only after tests and uses pinned actions", () 
 test("Browser JS parses as native modules without npm dependencies", () => {
   for (const path of [
     "site/app.js", "site/operations.js", "src/memory-document-provider.js",
-    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs", "tools/smoke-mo-v2.mjs"
+    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs", "tools/smoke-mo-v2.mjs", "tools/smoke-mo-v3.mjs", "site/mo-transition-observer.js"
   ]) assert.doesNotThrow(() => execFileSync(process.execPath, ["--check", resolve(root, path)]));
 });
