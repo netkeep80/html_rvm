@@ -87,7 +87,8 @@ function selectEndpoint(value){selected=value;inspect();records();fields();rende
 function transitionDisplay(value){return {source:value.source,action:value.action,committed:value.committed,"Π":value.pi,"Ω":value.omega,born:value.born,dead:value.dead,trace:value.trace};}
 function renderTransitions(){
  const last=transitions.last,history=transitions.history;
- $("transition").textContent=last?pretty(transitionDisplay(last)):"—";
+ $("transition-view").textContent=last?pretty(transitionDisplay(last)):"—";
+ $("transition").textContent=last?pretty({persistence:last.pi,outcome:last.omega,born:last.born,dead:last.dead,...(last.trace===null?{}:{trace:last.trace})}):"—";
  $("transition-count").textContent=history.length;
  const box=$("transition-history");box.replaceChildren();
  for(const entry of [...history].reverse()){
