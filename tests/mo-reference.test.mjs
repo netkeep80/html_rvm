@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   N, P, Key, Index, Role,
-  createMOState, executeMO, executeMOAtomically,
+  createMOState, validateMOState, executeMO, executeMOAtomically,
   serializeLosslessMO, deserializeLosslessMO,
   projectPlainJSON, embedPlainJSON, applyJSONOperation,
   SequentialMOAllocator, requireCanonicalJSONTree
@@ -204,4 +204,96 @@ test("atomic composite rollback is not inverse execution and restores used sets 
   assert.equal(t.state.used.P.has("p"), false);
   assert.deepEqual(t.trace, []);
   assert.equal(Object.hasOwn(t, "history"), false);
+});
+
+
+test("audit MO-R0-01: legal __proto__ JSON keys survive embedding, projection and entity payload cloning", () => {
+  const value = JSON.parse('{"__proto__":1,"nested":{"__proto__":{"x":2}},"a":3}');
+  const { state } = embedPlainJSON(value);
+  const projected = projectPlainJSON(state);
+  assert.equal(Object.hasOwn(projected, "__proto__"), true);
+  assert.equal(projected.__proto__, 1);
+  assert.equal(Object.hasOwn(projected.nested, "__proto__"), true);
+  assert.deepEqual(projected.nested.__proto__, { x: 2 });
+  assert.deepEqual(projected, value);
+
+  let entityState = createMOState();
+  entityState = action(entityState, { op: "createNode", id: "e", kind: "entity", payload: value });
+  const payload = entityState.nodes.get("e").payload;
+  assert.equal(Object.hasOwn(payload, "__proto__"), true);
+  assert.equal(payload.__proto__, 1);
+  assert.deepEqual(payload, value);
+});
+
+test("audit MO-R0-02: R0 canonicalizes negative zero to JSON number zero consistently", () => {
+  let s = createMOState();
+  let t = executeMO(s, { op: "createNode", id: "z", kind: "number", payload: -0 });
+  assert.equal(t.outcome.status, "OK");
+  s = t.state;
+  assert.equal(Object.is(s.nodes.get("z").payload, -0), false);
+  assert.equal(s.nodes.get("z").payload, 0);
+
+  t = executeMO(s, { op: "setNode", id: "z", kind: "number", payload: 0 });
+  assert.equal(t.outcome.status, "OK");
+  assert.equal(t.outcome.semanticChange, false);
+
+  const encoded = serializeLosslessMO(s);
+  const decoded = deserializeLosslessMO(encoded);
+  assert.equal(serializeLosslessMO(decoded), encoded);
+  assert.equal(Object.is(decoded.nodes.get("z").payload, -0), false);
+
+  const embedded = embedPlainJSON(-0).state;
+  const projected = projectPlainJSON(embedded);
+  assert.equal(projected, 0);
+  assert.equal(Object.is(projected, -0), false);
+});
+
+test("audit MO-R0-03: one-step atomic execution is closed for explicit undefined unbind", () => {
+  let s = createMOState();
+  s = action(s, { op: "createNode", id: "owner", kind: "entity", payload: null });
+  s = action(s, { op: "createNode", id: "target", kind: "entity", payload: null });
+  s = action(s, { op: "createRelation", id: "p", owner: N("owner"), label: Role("r"), target: N("target") });
+
+  const a = { op: "rebindRelation", id: "p", target: undefined };
+  const direct = executeMO(s, a);
+  const atomic = executeMOAtomically(s, [a]);
+  assert.equal(direct.outcome.status, "OK");
+  assert.equal(atomic.outcome.status, "OK");
+  assert.equal(serializeLosslessMO(atomic.state), serializeLosslessMO(direct.state));
+  assert.equal(atomic.trace.length, 1);
+  assert.deepEqual(atomic.trace[0].action, { id: "p", op: "rebindRelation" });
+
+  const rejected = { op: "rebindRelation", id: "missing", target: undefined };
+  const directReject = executeMO(s, rejected);
+  const atomicReject = executeMOAtomically(s, [rejected]);
+  assert.equal(directReject.outcome.status, "REJECT");
+  assert.equal(atomicReject.outcome.status, "REJECT");
+  assert.equal(atomicReject.outcome.diagnostic, directReject.outcome.diagnostic);
+  assert.equal(serializeLosslessMO(atomicReject.state), serializeLosslessMO(s));
+  assert.deepEqual(atomicReject.trace, []);
+});
+
+test("audit MO-R0-04: valid state and lossless decoder share one exact identifier/boolean image", () => {
+  const invalid = createMOState();
+  invalid.used.N.add(42);
+  assert.throws(() => validateMOState(invalid), error => error?.diagnostic === "INVALID_ID");
+  assert.throws(() => serializeLosslessMO(invalid), error => error?.diagnostic === "INVALID_ID");
+
+  const encoded = {
+    $mo: "np-state/1",
+    nodes: [{ id: "n", kind: "entity", payload: null }],
+    relations: [{ id: "p", owner: ["N", "n"], label: { kind: "role", value: "r" }, bound: "false", target: null }],
+    roots: [],
+    used: { N: ["n"], P: ["p"] }
+  };
+  assert.throws(() => deserializeLosslessMO(encoded), error => error?.diagnostic === "INVALID_SERIALIZATION");
+
+  const duplicateUsed = {
+    $mo: "np-state/1",
+    nodes: [],
+    relations: [],
+    roots: [],
+    used: { N: ["n", "n"], P: [] }
+  };
+  assert.throws(() => deserializeLosslessMO(duplicateUsed), error => error?.diagnostic === "INVALID_SERIALIZATION");
 });
