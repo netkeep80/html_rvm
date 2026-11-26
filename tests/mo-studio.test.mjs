@@ -100,5 +100,12 @@ test("V3 observer keeps committed history distinct from reject and rollback",()=
  const reject=s.action({op:"deleteNode",id:"missing"});o.observe(reject,{source:"action"});assert.equal(o.last.omega.status,"REJECT");assert.equal(o.history.length,2);
  const atomic=s.atomic([{op:"createNode",id:"y",kind:"entity",payload:null}]);o.observe(atomic,{source:"atomic"});assert.equal(o.history.length,3);assert.deepEqual(o.history[2].trace,atomic.trace);assert.equal(o.history[2].trace.length,1);
  const rolled=s.atomic([{op:"createNode",id:"z",kind:"entity",payload:null},{op:"deleteNode",id:"missing"}]);assert.deepEqual(rolled.trace,[]);o.observe(rolled,{source:"atomic"});assert.equal(o.history.length,3);assert.deepEqual(o.last.trace,[]);assert.equal(s.state.nodes.has("z"),false);
+ const beforeBoundaryState=s.lossless(),beforeBoundaryHistory=o.history;
+ const failedImport=s.load("{","plain");assert.equal(failedImport.boundary,true);assert.equal(failedImport.outcome.status,"REJECT");assert.equal("persistence" in failedImport,false);assert.equal("born" in failedImport,false);assert.equal("dead" in failedImport,false);
+ o.observe(failedImport,{source:"session-load"});
+ assert.equal(o.last.boundary,true);assert.equal(o.last.committed,false);assert.equal(o.last.pi,null);assert.equal(o.last.born,null);assert.equal(o.last.dead,null);assert.equal(o.last.trace,null);
+ assert.deepEqual(o.history,beforeBoundaryHistory);assert.equal(s.lossless(),beforeBoundaryState);
+ const realReject=s.action({op:"deleteNode",id:"missing"});o.observe(realReject,{source:"action"});
+ assert.equal(o.last.boundary,false);assert.notEqual(o.last.pi,null);assert.notEqual(o.last.born,null);assert.notEqual(o.last.dead,null);
  const session=s.reset("empty");o.observe(session,{source:"session-reset"});assert.equal(o.history.length,0);assert.equal(o.last,null);
 });

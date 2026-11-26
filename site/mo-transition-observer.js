@@ -2,15 +2,17 @@ const copy=value=>value===undefined?undefined:structuredClone(value);
 
 export function transitionObservation(transition,meta={}){
  if(!transition||typeof transition!=="object"||!transition.outcome)throw Error("TRANSITION_REQUIRED");
+ const boundary=transition.boundary===true;
  return {
   source:typeof meta.source==="string"&&meta.source?meta.source:"runtime",
   action:meta.action===undefined?null:copy(meta.action),
-  committed:transition.outcome.status==="OK",
-  pi:copy(transition.persistence??{N:[],P:[]}),
+  boundary,
+  committed:!boundary&&transition.outcome.status==="OK",
+  pi:boundary?null:copy(transition.persistence),
   omega:copy(transition.outcome),
-  born:copy(transition.born??{N:[],P:[]}),
-  dead:copy(transition.dead??{N:[],P:[]}),
-  trace:transition.trace===undefined?null:copy(transition.trace)
+  born:boundary?null:copy(transition.born),
+  dead:boundary?null:copy(transition.dead),
+  trace:boundary?null:(transition.trace===undefined?null:copy(transition.trace))
  };
 }
 
