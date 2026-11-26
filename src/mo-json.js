@@ -129,7 +129,7 @@ export function embedPlainJSON(value, { allocator = new SequentialMOAllocator() 
   plan.actions.push({ op: "setRoots", roots: [N(plan.rootId)] });
   const transition = executeMOAtomically(state, plan.actions);
   if (transition.outcome.status !== "OK") reject("JSON_EMBED_FAILED", transition.outcome.diagnostic);
-  return { state: transition.state, root: N(plan.rootId), history: transition.history };
+  return { state: transition.state, root: N(plan.rootId), trace: transition.trace };
 }
 
 function structuralReachable(state, root) {
@@ -235,7 +235,7 @@ export function applyJSONOperation(state, operation, { root = state.roots[0], al
         state,
         persistence: identityPersistence(state),
         outcome: { status: "OK", diagnostic: null, return: null, semanticChange: false },
-        born: { N: [], P: [] }, dead: { N: [], P: [] }, history: []
+        born: { N: [], P: [] }, dead: { N: [], P: [] }, trace: []
       };
     }
     const subtree = elaborateJSONSubtree(nextValue, state, allocator);
