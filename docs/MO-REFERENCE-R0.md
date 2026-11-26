@@ -82,7 +82,7 @@ Sharing is unfolded. Cycles, unbound members, relation targets, sparse arrays an
 
 Thus plain JSON is a quotient of semantic state: identity, aliasing, used/lifetime history, assertions and unreachable state are intentionally forgotten.
 
-The numeric adapter in R0 uses finite ECMAScript `number` payloads. This implementation choice does not claim to settle the separate D2 lexical/exact-decimal question.
+The numeric adapter in R0 uses finite ECMAScript `number` payloads and canonicalizes `-0` to `+0` at the semantic boundary. This keeps state equality, plain JSON projection and tagged serialization consistent. This implementation choice does not claim to settle the separate D2 lexical/exact-decimal question.
 
 ## 6. Lossless JSON graph serialization
 
@@ -94,7 +94,7 @@ The numeric adapter in R0 uses finite ECMAScript `number` payloads. This impleme
 - roots;
 - used sets.
 
-`deserializeLosslessMO` validates and restores that state exactly. Cycles and sharing are preserved because references are explicit IDs rather than recursive inline values.
+`deserializeLosslessMO` validates and restores that state exactly. Its image is strict: used IDs must be valid unique semantic IDs, `bound` is a JSON boolean rather than a truthy value, and unbound relations carry `target:null`. Cycles and sharing are preserved because references are explicit IDs rather than recursive inline values.
 
 This is not the same interface as `projectPlainJSON`.
 
@@ -120,6 +120,10 @@ The R0 tests target mathematical distinctions rather than coverage volume:
 - plain JSON loss of alias identity;
 - cycle obstruction for plain JSON;
 - exact lossless serialization of relation endpoints, unbound state and dead used IDs;
+- legal JSON keys such as `__proto__` at arbitrary nesting depth;
+- canonical `-0 -> +0` numeric semantics;
+- one-step atomic closure for explicit unbind and rejected actions containing `undefined`;
+- strict lossless decoder image for used IDs and boolean binding flags;
 - JSON add/remove/replace translated through MO;
 - refusal of shared-DAG path mutation without an explicit COW/locality policy.
 
