@@ -176,7 +176,7 @@ export function cloneMOState(state) {
     relations: new Map([...state.relations].map(([id, relation]) => [id, {
       owner: normalizeEndpoint(relation.owner),
       label: normalizeLabel(relation.label),
-      bound: Boolean(relation.bound),
+      bound: relation.bound,
       target: relation.bound ? normalizeEndpoint(relation.target) : null
     }])),
     roots: state.roots.map(normalizeEndpoint),
