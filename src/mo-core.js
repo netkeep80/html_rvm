@@ -487,14 +487,14 @@ export function deserializeLosslessMO(value) {
   const state = createMOState();
   if (!Array.isArray(obj.used.N) || !Array.isArray(obj.used.P)) reject("INVALID_SERIALIZATION");
   for (const id of obj.used.N) {
-    id = requireId(id);
-    if (state.used.N.has(id)) reject("INVALID_SERIALIZATION");
-    state.used.N.add(id);
+    const normalizedId = requireId(id);
+    if (state.used.N.has(normalizedId)) reject("INVALID_SERIALIZATION");
+    state.used.N.add(normalizedId);
   }
   for (const id of obj.used.P) {
-    id = requireId(id);
-    if (state.used.P.has(id)) reject("INVALID_SERIALIZATION");
-    state.used.P.add(id);
+    const normalizedId = requireId(id);
+    if (state.used.P.has(normalizedId)) reject("INVALID_SERIALIZATION");
+    state.used.P.add(normalizedId);
   }
   for (const node of obj.nodes) {
     const id = requireId(node.id);
