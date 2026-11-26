@@ -17,3 +17,15 @@ relations:
     target: { kind: artifact, path: "tests/mo-reference.test.mjs" }
   - predicates: [ documents ]
     target: { kind: artifact, path: "docs/MO-REFERENCE-R0.md" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/mo-studio.html" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/mo-studio.css" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/mo-studio.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/mo-studio-ui.js" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/mo-studio.test.mjs" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/MO-STUDIO-R0.md" }
