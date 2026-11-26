@@ -202,4 +202,6 @@ test("atomic composite rollback is not inverse execution and restores used sets 
   assert.equal(t.outcome.status, "REJECT");
   assert.equal(serializeLosslessMO(t.state), before);
   assert.equal(t.state.used.P.has("p"), false);
+  assert.deepEqual(t.trace, []);
+  assert.equal(Object.hasOwn(t, "history"), false);
 });
