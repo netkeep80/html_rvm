@@ -80,9 +80,25 @@ try{
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
  await click(await coords("P","p1"));await press("graph-create-unbound");check(find(await state(),"p2")?.bound===false,"create unbound P");
  await shot("04-unbound");
+ await click(await coords("P","p1"));await set("graph-edit-value","renamed");await press("graph-save");
+ check(find(await state(),"p1")?.label.value==="renamed","mouse relabel P");
+ await press("graph-root");check((await state()).roots.some(e=>same(e,["P","p1"])),"root P added");
+ await press("graph-root");check(!(await state()).roots.some(e=>same(e,["P","p1"])),"root P removed");
+ await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'});[...document.querySelectorAll('#graph-layer [data-key]')].find(g=>g.dataset.key===JSON.stringify(['N','root'])).focus()");
+ await send("Input.dispatchKeyEvent",{type:"keyDown",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});await send("Input.dispatchKeyEvent",{type:"keyUp",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});
+ check((await evaluate("document.getElementById('graph-selected').textContent"))==="N:root","keyboard selects N");
  await send("Emulation.setDeviceMetricsOverride",{width:390,height:844,deviceScaleFactor:1,mobile:false});
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
  check(await evaluate("document.documentElement.scrollWidth<=innerWidth"),"responsive no horizontal overflow");await shot("05-mobile");
  await writeFile(join(output,"receipt.json"),JSON.stringify({head,checks:n,viewport:[1440,1200],mobile:[390,844]},null,2));
  console.log("MO_VISUAL_BROWSER_PASS "+n);
-}finally{ws?.close();browser?.kill();await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true});}
+}finally{
+ ws?.close();
+ if(browser&&browser.exitCode===null&&browser.signalCode===null){
+  const closed=new Promise(r=>browser.once("close",r));browser.kill();
+  await Promise.race([closed,sleep(3000)]);
+  if(browser.exitCode===null&&browser.signalCode===null){browser.kill("SIGKILL");await Promise.race([closed,sleep(1000)]);}
+ }
+ server.closeAllConnections();await new Promise(r=>server.close(r));
+ await rm(tmp,{recursive:true,force:true,maxRetries:10,retryDelay:150});
+}
