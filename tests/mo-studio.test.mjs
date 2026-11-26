@@ -4,6 +4,7 @@ import {freshVisualId,visualRecords} from "../site/mo-visual-graph.js";
 import {createMOState,losslessMOObject} from "../src/mo-reference.js";
 import {createStudio,examples} from "../site/mo-studio.js";
 import {locateVPath,projectionOccurrences,losslessLocators,syncSnapshot} from "../site/mo-projection-sync.js";
+import {createTransitionObserver,transitionObservation} from "../site/mo-transition-observer.js";
 import {readFileSync,existsSync,mkdtempSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
@@ -34,7 +35,7 @@ test("MO Studio atomic reject and invalid imports preserve full state",()=>{
 test("MO Studio Pages artifact includes actual R0 modules and accessible entry",()=>{
  const d=mkdtempSync(join(tmpdir(),"mo-studio-"));
  try{const r=buildPages(join(d,"dist"),{version:"01.07"});
- for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","site/mo-visual-graph.js","site/mo-projection-sync.js","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
+ for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","site/mo-visual-graph.js","site/mo-projection-sync.js","site/mo-transition-observer.js","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
  assert.match(readFileSync(join(r.destination,"site/index.html"),"utf8"),/href="\.\/mo-studio.html"/);
  for(const f of ["site/mo-studio.js","site/mo-studio-ui.js"])execFileSync(process.execPath,["--check",join(r.destination,f)]);
  }finally{rmSync(d,{recursive:true,force:true});}
@@ -87,4 +88,17 @@ test("V2 G locators dereference exact mixed-case R0 lossless entries",()=>{
  }
  assert.deepEqual(g.used.N.slice(-2),["A","a"]);
  assert.deepEqual(g.used.P,["A","a"]);
+});
+
+test("V3 observer keeps committed history distinct from reject and rollback",()=>{
+ const s=createStudio(createMOState()),o=createTransitionObserver(4);
+ const create={op:"createNode",id:"x",kind:"entity",payload:null},t1=s.action(create);
+ const before=JSON.stringify({persistence:t1.persistence,outcome:t1.outcome,born:t1.born,dead:t1.dead});
+ const observed=transitionObservation(t1,{source:"action",action:create});assert.equal(observed.committed,true);assert.equal(JSON.stringify({persistence:t1.persistence,outcome:t1.outcome,born:t1.born,dead:t1.dead}),before);
+ o.observe(t1,{source:"action",action:create});assert.equal(o.history.length,1);assert.equal(o.history[0].omega.semanticChange,true);
+ const noop={op:"setNode",id:"x",kind:"entity",payload:null},t2=s.action(noop);assert.equal(t2.outcome.semanticChange,false);o.observe(t2,{source:"action",action:noop});assert.equal(o.history.length,2);assert.equal(o.history[1].omega.semanticChange,false);
+ const reject=s.action({op:"deleteNode",id:"missing"});o.observe(reject,{source:"action"});assert.equal(o.last.omega.status,"REJECT");assert.equal(o.history.length,2);
+ const atomic=s.atomic([{op:"createNode",id:"y",kind:"entity",payload:null}]);o.observe(atomic,{source:"atomic"});assert.equal(o.history.length,3);assert.deepEqual(o.history[2].trace,atomic.trace);assert.equal(o.history[2].trace.length,1);
+ const rolled=s.atomic([{op:"createNode",id:"z",kind:"entity",payload:null},{op:"deleteNode",id:"missing"}]);assert.deepEqual(rolled.trace,[]);o.observe(rolled,{source:"atomic"});assert.equal(o.history.length,3);assert.deepEqual(o.last.trace,[]);assert.equal(s.state.nodes.has("z"),false);
+ const session=s.reset("empty");o.observe(session,{source:"session-reset"});assert.equal(o.history.length,0);assert.equal(o.last,null);
 });

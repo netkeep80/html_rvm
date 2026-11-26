@@ -1,10 +1,12 @@
 import {mountVisualGraph} from "./mo-visual-graph.js";
 import {locateVPath,syncSnapshot} from "./mo-projection-sync.js";
+import {createTransitionObserver} from "./mo-transition-observer.js";
 import {createStudio} from "./mo-studio.js";
 const $=id=>document.getElementById(id);
 const studio=createStudio();
 let selected=null;
 let visual=null;
+const transitions=createTransitionObserver(32);
 const pretty=x=>JSON.stringify(x,null,2);
 const ep=x=>x?x.sort+":"+x.id:"—";
 const operations={
@@ -45,7 +47,7 @@ function parseAction(){
  return a;
 }
 function notify(t){$("status").textContent=t.outcome.status+(t.outcome.diagnostic?" · "+t.outcome.diagnostic:"")+(t.message?" · "+t.message:"")+(t.session?" · новый сеанс":"");$("status").className=t.outcome.status==="REJECT"?"reject":"";}
-function run(fn){try{const t=fn();notify(t);if(t.session){selected=null;$("sync-path").value="[]";visual?.reset();}render();}catch(e){$("status").textContent="INPUT_ERROR · "+e.message;$("status").className="reject";}}
+function run(fn,meta={source:"graph"}){try{const t=fn();notify(t);const resolved={...meta,action:typeof meta.action==="function"?meta.action():meta.action};transitions.observe(t,resolved);if(t.session){selected=null;$("sync-path").value="[]";visual?.reset();}render();}catch(e){$("status").textContent="INPUT_ERROR · "+e.message;$("status").className="reject";}}
 function records(){
  const s=studio.state;const tbody=$("records");tbody.replaceChildren();const filter=$("filter").value.toLowerCase();
  for(const [sort,map] of [["N",s.nodes],["P",s.relations]])for(const [id,r] of map){
@@ -82,6 +84,18 @@ function renderSync(){
  $("sync-use-edit").dataset.path=snap.editablePath?JSON.stringify(snap.editablePath):"";
 }
 function selectEndpoint(value){selected=value;inspect();records();fields();renderSync();visual?.render();}
+function transitionDisplay(value){return {source:value.source,action:value.action,committed:value.committed,"Π":value.pi,"Ω":value.omega,born:value.born,dead:value.dead,trace:value.trace};}
+function renderTransitions(){
+ const last=transitions.last,history=transitions.history;
+ $("transition").textContent=last?pretty(transitionDisplay(last)):"—";
+ $("transition-count").textContent=history.length;
+ const box=$("transition-history");box.replaceChildren();
+ for(const entry of [...history].reverse()){
+  const card=element("article");card.className="transition-entry";card.dataset.seq=entry.seq;
+  const summary=element("div","#"+entry.seq+" · "+entry.source+" · "+entry.omega.status+" · semanticChange="+entry.omega.semanticChange+" · born N/P "+entry.born.N.length+"/"+entry.born.P.length+" · dead N/P "+entry.dead.N.length+"/"+entry.dead.P.length);summary.className="transition-summary";
+  const detail=element("pre",pretty(transitionDisplay(entry)));card.append(summary,detail);box.append(card);
+ }
+}
 
 function render(){
  const s=studio.state;
@@ -90,9 +104,8 @@ function render(){
  const selector=$("projection-root");const previous=selector.value;selector.replaceChildren();
  for(const r of s.roots)selector.append(option(pretty(r),ep(r)));
  if([...selector.options].some(o=>o.value===previous))selector.value=previous;
- projection();renderSync();
+ projection();renderSync();renderTransitions();
  $("lossless").textContent=pretty(JSON.parse(studio.lossless()));
- const t=studio.last;if(t){const {state,...rest}=t;$("transition").textContent=pretty(rest);}else $("transition").textContent="—";
  const tree=studio.treeStatus();$("tree-status").textContent=tree.ok?"Canonical tree · редактирование разрешено":"Редактирование недоступно · "+tree.diagnostic;$("json-apply").disabled=!tree.ok;
  visual?.render();
 }
@@ -101,11 +114,11 @@ $("op").onchange=fields;$("filter").oninput=records;$("projection-root").onchang
 $("sync-locate-node").onclick=()=>{const raw=readSyncPath(),located=raw.ok?locateVPath(studio.state,projectionRoot(),raw.path):raw;if(located.ok)selectEndpoint(located.node);};
 $("sync-locate-relation").onclick=()=>{const raw=readSyncPath(),located=raw.ok?locateVPath(studio.state,projectionRoot(),raw.path):raw;if(located.ok&&located.relation)selectEndpoint(located.relation);};
 $("sync-use-edit").onclick=()=>{const snap=syncSnapshot(studio.state,projectionRoot(),selected);if(snap.editablePath){$("json-path").value=JSON.stringify(snap.editablePath);$("sync-path-status").textContent="Occurrence copied to JSON edit path";}};
-$("action-form").onsubmit=e=>{e.preventDefault();run(()=>studio.action(parseAction()));};
-$("atomic").onclick=()=>run(()=>studio.atomic(JSON.parse($("batch").value)));
-$("json-form").onsubmit=e=>{e.preventDefault();run(()=>{const op=$("json-op").value;return studio.edit({op,path:JSON.parse($("json-path").value),...(op==="remove"?{}:{value:JSON.parse($("json-value").value)})});});};
-$("import").onclick=()=>{if(confirm("Заменить текущий сеанс МО?")){run(()=>studio.load($("import-text").value,$("import-mode").value));}};
-for(const id of ["tree","graph","empty"])$(id).onclick=()=>{if(confirm("Заменить текущий сеанс МО?")){selected=null;run(()=>studio.reset(id));}};
+$("action-form").onsubmit=e=>{e.preventDefault();let action;run(()=>{action=parseAction();return studio.action(action);},{source:"action",action:()=>action});};
+$("atomic").onclick=()=>{let actions;run(()=>{actions=JSON.parse($("batch").value);return studio.atomic(actions);},{source:"atomic",action:()=>actions});};
+$("json-form").onsubmit=e=>{e.preventDefault();let action;run(()=>{const op=$("json-op").value;action={op,path:JSON.parse($("json-path").value),...(op==="remove"?{}:{value:JSON.parse($("json-value").value)})};return studio.edit(action);},{source:"json-edit",action:()=>action});};
+$("import").onclick=()=>{if(confirm("Заменить текущий сеанс МО?")){run(()=>studio.load($("import-text").value,$("import-mode").value),{source:"session-load"});}};
+for(const id of ["tree","graph","empty"])$(id).onclick=()=>{if(confirm("Заменить текущий сеанс МО?")){selected=null;run(()=>studio.reset(id),{source:"session-reset"});}};
 $("export").onclick=()=>{const url=URL.createObjectURL(new Blob([studio.lossless()],{type:"application/json"}));const a=element("a");a.href=url;a.download="mo-state.json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 fetch("./build-info.json").then(r=>r.json()).then(i=>{$("version").textContent=/^[0-9]{2}\.[0-9]{2}$/.test(i.version)?i.version:"";}).catch(()=>{});
 visual=mountVisualGraph({studio,getSelected:()=>selected,select:selectEndpoint,run});
