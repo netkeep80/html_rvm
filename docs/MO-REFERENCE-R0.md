@@ -50,7 +50,7 @@ Implemented reference operations:
 - `setRoots`;
 - `reassert` as explicit replacement of an assertion occurrence.
 
-All operations run against a draft and commit only after full state validation. Reject returns the original state and identity persistence. This is transaction rollback, not an inverse semantic execution.
+All operations run against a draft and commit only after full state validation. Reject returns the original state and identity persistence. This is transaction rollback, not an inverse semantic execution. `executeMOSequence` exposes committed semantic history; `executeMOAtomically` exposes an internal `trace` only for a successful composite. A rolled-back composite returns an empty trace, so tentative births/deaths do not become semantic history.
 
 Ordinary `setNode` and `rebindRelation` to an already equal value are successful semantic no-ops. `reassert` is a different operation and creates a fresh relation occurrence. R0 rejects reassertion of a relation that is itself referenced, rather than silently retargeting references; atomic replacement-with-reference-retargeting remains a distinct future operation if required.
 
