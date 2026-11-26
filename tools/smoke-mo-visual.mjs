@@ -92,6 +92,7 @@ try{
  await shot("04-unbound");
  // Regression: real input with deliberate capture release after pointerdown.
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
+ const captureBefore=await state();
  const start=await coords("P","a","create"),end=await coords("P","b");
  await mouse("mouseMoved",start,0);await frame();await mouse("mousePressed",start,1);await frame();
  const downIndex=await evaluate("window.__v1PointerTrace.findLastIndex(e=>e.type==='pointerdown'&&e.key===JSON.stringify(['P','a'])&&e.port==='create')");
@@ -106,7 +107,10 @@ try{
  captureRegressionTrace=await evaluate("(()=>{const t=window.__v1PointerTrace.slice("+downIndex+"),id=t[0].id;const up=t.findIndex(e=>e.type==='pointerup'&&e.id===id);return t.slice(0,up+1);})()");
  const lostIndex=captureRegressionTrace.findIndex(e=>e.type==="lostpointercapture"&&e.trusted&&(e.buttons&1)),upIndex=captureRegressionTrace.findIndex(e=>e.type==="pointerup");
  check(lostIndex>0&&upIndex>lostIndex,"capture trace proves down -> trusted lostcapture while held -> up");
- check(same(find(await state(),"p3")?.owner,["P","a"])&&same(find(await state(),"p3")?.target,["P","b"]),"capture loss does not cancel a valid P/P drag");
+ const captureAfter=await state(),captureExpected=JSON.parse(JSON.stringify(captureBefore));
+ captureExpected.relations.push({id:"p3",owner:["P","a"],label:{kind:"role",value:"context2"},bound:true,target:["P","b"]});captureExpected.relations.sort((a,b)=>a.id.localeCompare(b.id));captureExpected.used.P.push("p3");captureExpected.used.P.sort();
+ check(same(captureAfter,captureExpected),"capture-loss gesture has exact lossless state delta");
+ check(same(find(captureAfter,"p3")?.owner,["P","a"])&&same(find(captureAfter,"p3")?.target,["P","b"]),"capture loss does not cancel a valid P/P drag");
  const cancelBefore=await raw();
  const cancelStart=await coords("P","a","create");
  const cancelEnd=await evaluate("(()=>{const b=document.getElementById('mo-graph').getBoundingClientRect();return {x:b.right-20,y:b.bottom-20};})()");
