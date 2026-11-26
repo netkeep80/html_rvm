@@ -31,7 +31,7 @@ try{
  for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('#graph-layer [data-key]')"))break;await sleep(100);}
  // Wait for actual layout/compositor frames after scroll or SVG replacement, not for a guessed timeout.
  const frame=()=>evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r(true))))");
- await evaluate("window.__v1PointerTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','gotpointercapture','lostpointercapture'])document.addEventListener(type,e=>{const at=document.elementFromPoint(e.clientX,e.clientY);window.__v1PointerTrace.push({type,id:e.pointerId,buttons:e.buttons,trusted:e.isTrusted,x:e.clientX,y:e.clientY,port:e.target.getAttribute?.('data-port'),key:e.target.closest?.('[data-key]')?.dataset.key,hit:at?.closest?.('[data-key]')?.dataset.key,hitPort:at?.getAttribute?.('data-port')});if(window.__v1PointerTrace.length>30)window.__v1PointerTrace.shift();},true);true");
+ await evaluate("window.__v1PointerTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','gotpointercapture','lostpointercapture'])document.addEventListener(type,e=>{const at=document.elementFromPoint(e.clientX,e.clientY);window.__v1PointerTrace.push({type,id:e.pointerId,buttons:e.buttons,trusted:e.isTrusted,x:e.clientX,y:e.clientY,port:e.target.getAttribute?.('data-port'),key:e.target.closest?.('[data-key]')?.dataset.key,hit:at?.closest?.('[data-key]')?.dataset.key,hitPort:at?.getAttribute?.('data-port')});if(window.__v1PointerTrace.length>200)window.__v1PointerTrace.shift();},true);true");
  const raw=()=>evaluate("document.getElementById('lossless').textContent");
  const state=async()=>JSON.parse(await raw());
  const find=(s,id)=>s.relations.find(r=>r.id===id);
@@ -92,7 +92,7 @@ try{
  await shot("04-unbound");
  // Regression: real input with deliberate capture release after pointerdown.
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
- const captureBefore=await state();
+ const captureBefore=await state();await evaluate("window.__v1PointerTrace.length=0");
  const start=await coords("P","a","create"),end=await coords("P","b");
  await mouse("mouseMoved",start,0);await frame();await mouse("mousePressed",start,1);await frame();
  const downIndex=await evaluate("window.__v1PointerTrace.findLastIndex(e=>e.type==='pointerdown'&&e.key===JSON.stringify(['P','a'])&&e.port==='create')");
