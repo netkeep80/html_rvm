@@ -100,7 +100,8 @@ try{
  const captureInfo=await evaluate("(()=>{const svg=document.getElementById('mo-graph'),e=window.__v1PointerTrace["+downIndex+"];return {id:e.id,trusted:e.trusted,buttons:e.buttons,captured:svg.hasPointerCapture(e.id)};})()");
  check(captureInfo.trusted&&captureInfo.buttons===1&&captureInfo.captured,"capture regression starts with trusted held-button capture");
  await evaluate("(()=>{const svg=document.getElementById('mo-graph'),e=window.__v1PointerTrace["+downIndex+"];svg.releasePointerCapture(e.id);return true;})()");
- await frame();
+ const captureFlush={x:(start.x+end.x)/2,y:(start.y+end.y)/2};
+ await mouse("mouseMoved",captureFlush,1);await frame();
  const lostBeforeUp=await evaluate("(()=>{const t=window.__v1PointerTrace.slice("+downIndex+"),id=t[0].id;const lost=t.findIndex(e=>e.type==='lostpointercapture'&&e.id===id&&e.trusted);const up=t.findIndex(e=>e.type==='pointerup'&&e.id===id);return {lost,up,trace:t};})()");
  check(lostBeforeUp.lost>0&&lostBeforeUp.up<0,"trusted lostpointercapture occurs for same pointer before any pointerup");
  captureRegressionEvidence={pointerId:captureInfo.id,buttonHeldProof:{pointerdownButtons:captureInfo.buttons,mouseReleasedSent:false},preReleaseTrace:lostBeforeUp.trace};
