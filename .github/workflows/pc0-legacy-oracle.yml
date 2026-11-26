@@ -49,7 +49,8 @@ jobs:
             git --version
           } | tee pc0-legacy-evidence/environment.txt
           test "$(git -C .pc0/jsonRVM rev-parse HEAD)" = "9d5f2000aba2c2ece0121f1d6bc84721a8728e7a"
-          test "$(git -C .pc0/jsonRVM rev-parse HEAD:modules/console/test)" = "38c6093318d4367ccb844961c92af517901e602e"
+          test "$(git -C .pc0/jsonRVM rev-parse HEAD^{tree})" = "38c6093318d4367ccb844961c92af517901e602e"
+          test "$(git -C .pc0/jsonRVM rev-parse HEAD:modules/console/test)" = "91876c9162327a18748c9eb6758cad1fdeaba9c2"
 
       - name: Configure pinned legacy oracle
         id: configure

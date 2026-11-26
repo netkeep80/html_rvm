@@ -20,7 +20,7 @@ V — обычные данные JSON (частичная проекция зн
 
 ## Закреплённый исторический корпус
 
-[jsonRVM / modules/console/test](https://github.com/netkeep80/jsonRVM/tree/9d5f2000aba2c2ece0121f1d6bc84721a8728e7a/modules/console/test), commit `9d5f2000aba2c2ece0121f1d6bc84721a8728e7a`, TREE `38c6093318d4367ccb844961c92af517901e602e`. Инвентарь Git tree (не выполнение): 22 файла, 15 JSON; raw byte sizes and Git blob SHA-1. #.json не загружался целиком и не анализировался в этой подготовительной дельте.
+[jsonRVM / modules/console/test](https://github.com/netkeep80/jsonRVM/tree/9d5f2000aba2c2ece0121f1d6bc84721a8728e7a/modules/console/test), commit `9d5f2000aba2c2ece0121f1d6bc84721a8728e7a`, root TREE `38c6093318d4367ccb844961c92af517901e602e`, corpus subtree `91876c9162327a18748c9eb6758cad1fdeaba9c2`. Инвентарь Git tree (не выполнение): 22 файла, 15 JSON; raw byte sizes and Git blob SHA-1. #.json не загружался целиком и не анализировался в этой подготовительной дельте.
 
 | Файл | Raw bytes | Git blob |
 |---|---:|---|
