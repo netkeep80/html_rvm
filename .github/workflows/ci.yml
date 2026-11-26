@@ -25,6 +25,8 @@ jobs:
           node-version: "24"
       - name: Run S0 structural + S1A read-only runtime tests (NOT full conformance)
         run: npm test
+      - name: MO Studio browser smoke on packaged Pages (Chromium)
+        run: node tools/smoke-mo-browser.mjs
 
   repo-guard:
     name: RepoGuard exact BASE/HEAD — compiler
