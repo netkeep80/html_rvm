@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><title>MO Studio browser smoke</title></head><body>
+<pre id="result">PENDING</pre><iframe id="studio" src="/site/mo-studio.html" style="width:1200px;height:900px"></iframe>
+<script>
+const result=document.getElementById("result"),frame=document.getElementById("studio");
+let count=0;
+function check(value,message){if(!value)throw new Error(message);count++;}
+frame.addEventListener("load",()=>{
+ try{
+ const w=frame.contentWindow,d=frame.contentDocument,$=id=>d.getElementById(id);
+ w.confirm=()=>true;
+ const read=id=>JSON.parse($(id).textContent);
+ const click=id=>$(id).click();
+ const submit=id=>$(id).dispatchEvent(new w.Event("submit",{cancelable:true,bubbles:true}));
+ const select=(id,value)=>{$(id).value=value;$(id).dispatchEvent(new w.Event("change",{bubbles:true}));};
+ check(read("plain").counter===0&&$("n-count").textContent!=="","initial tree");
+ $("json-value").value="7";submit("json-form");check(read("plain").counter===7&&read("transition").outcome.status==="OK","JSON edit");
+ click("graph");check(read("plain").a===42&&read("plain").b===42&&$("json-apply").disabled,"sharing guard");
+ const graph=read("lossless");check(graph.relations.some(p=>p.id==="meta"&&p.owner[0]==="P")&&graph.relations.some(p=>p.id==="loop"&&p.target[0]==="P"),"relation-over-relation");
+ select("op","createRelation");$("field-id").value="self";$("field-owner").value=[...$("field-owner").options].find(o=>o.textContent==="N:root").value;$("field-label").value='{"kind":"key","value":"self"}';$("field-target").value=$("field-owner").value;submit("action-form");
+ check($("plain").textContent.includes("JSON_CYCLE")&&read("transition").outcome.status==="OK","cycle native action");
+ const before=$("lossless").textContent;$("batch").value='[{"op":"createNode","id":"tmp","kind":"entity"},{"op":"deleteNode","id":"missing"}]';click("atomic");
+ check($("lossless").textContent===before&&read("transition").outcome.status==="REJECT"&&read("transition").trace.length===0,"rollback");
+ const encoded=$("lossless").textContent;click("empty");check($("n-count").textContent==="0"&&$("p-count").textContent==="0","empty reset");
+ select("import-mode","lossless");$("import-text").value=encoded;click("import");check($("lossless").textContent===encoded&&$("plain").textContent.includes("JSON_CYCLE"),"lossless import");
+ result.textContent="MO_BROWSER_PASS "+count+"/8";
+ }catch(e){result.textContent="MO_BROWSER_FAIL "+count+"/8 "+e.message;}
+});
+</script></body></html>
