@@ -1,0 +1,108 @@
+name: PC0 — pinned jsonRVM legacy oracle
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+    paths:
+      - ".github/workflows/pc0-legacy-oracle.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-oracle:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact PC0 branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Checkout pinned jsonRVM oracle
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: netkeep80/jsonRVM
+          ref: 9d5f2000aba2c2ece0121f1d6bc84721a8728e7a
+          path: .pc0/jsonRVM
+          persist-credentials: false
+
+      - name: Verify exact legacy identity and record environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pc0-legacy-evidence
+          {
+            echo "html_rvm_head=${{ github.event.pull_request.head.sha }}"
+            echo "legacy_expected=9d5f2000aba2c2ece0121f1d6bc84721a8728e7a"
+            echo "legacy_actual=$(git -C .pc0/jsonRVM rev-parse HEAD)"
+            echo "corpus_tree_expected=38c6093318d4367ccb844961c92af517901e602e"
+            echo "corpus_tree_actual=$(git -C .pc0/jsonRVM rev-parse HEAD:modules/console/test)"
+            echo "--- uname ---"
+            uname -a
+            echo "--- c++ ---"
+            c++ --version
+            echo "--- cmake ---"
+            cmake --version
+            echo "--- git ---"
+            git --version
+          } | tee pc0-legacy-evidence/environment.txt
+          test "$(git -C .pc0/jsonRVM rev-parse HEAD)" = "9d5f2000aba2c2ece0121f1d6bc84721a8728e7a"
+          test "$(git -C .pc0/jsonRVM rev-parse HEAD:modules/console/test)" = "38c6093318d4367ccb844961c92af517901e602e"
+
+      - name: Configure pinned legacy oracle
+        id: configure
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake -S .pc0/jsonRVM -B .pc0/build -DCMAKE_BUILD_TYPE=Release -DENABLE_VOCABULARY=OFF 2>&1 | tee pc0-legacy-evidence/configure.log
+
+      - name: Build rmvm.test
+        id: build
+        if: steps.configure.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build .pc0/build --target rmvm.test --parallel 2 2>&1 | tee pc0-legacy-evidence/build.log
+
+      - name: Run untouched ConsoleTest
+        id: run_oracle
+        if: steps.configure.outcome == 'success' && steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          BIN="$GITHUB_WORKSPACE/.pc0/build/modules/console/test/rmvm.test"
+          test -x "$BIN"
+          (
+            cd .pc0/jsonRVM/modules/console/test
+            "$BIN"
+          ) 2>&1 | tee "$GITHUB_WORKSPACE/pc0-legacy-evidence/console-test.log"
+
+      - name: Record exact PC0 verdict
+        if: always()
+        shell: bash
+        env:
+          CONFIGURE: ${{ steps.configure.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          RUN_ORACLE: ${{ steps.run_oracle.outcome }}
+        run: |
+          {
+            echo "configure=$CONFIGURE"
+            echo "build=$BUILD"
+            echo "run_oracle=$RUN_ORACLE"
+          } | tee pc0-legacy-evidence/verdict.txt
+          test "$CONFIGURE" = "success"
+          test "$BUILD" = "success"
+          test "$RUN_ORACLE" = "success"
+
+      - name: Retain PC0 legacy-oracle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pc0-legacy-oracle-evidence
+          path: pc0-legacy-evidence/
+          if-no-files-found: error
