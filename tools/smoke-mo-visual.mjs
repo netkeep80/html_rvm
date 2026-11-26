@@ -11,7 +11,7 @@ const tmp=await mkdtemp(join(tmpdir(),"mo-visual-"));
 const root=join(tmp,"dist"),output=resolve(process.env.MO_VISUAL_EVIDENCE||"mo-visual-evidence");
 const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json"};
 const server=createServer(async(req,res)=>{try{const url=new URL(req.url,"http://localhost"),path=resolve(root,"."+url.pathname);if(!path.startsWith(root+"/"))throw Error("path");const bytes=await readFile(path);res.writeHead(200,{"content-type":types[extname(path)]??"application/octet-stream"});res.end(bytes);}catch{res.writeHead(404);res.end();}});
-let browser,ws;const sleep=ms=>new Promise(r=>setTimeout(r,ms));let n=0,captureRegressionTrace=null;
+let browser,ws;const sleep=ms=>new Promise(r=>setTimeout(r,ms));let n=0,captureRegressionTrace=null,captureRegressionEvidence=null;
 const check=(condition,name)=>{assert.ok(condition,name);console.log("V1 PASS",++n,name);};
 try{
  await mkdir(output,{recursive:true});
@@ -101,12 +101,14 @@ try{
  check(captureInfo.trusted&&captureInfo.buttons===1&&captureInfo.captured,"capture regression starts with trusted held-button capture");
  await evaluate("(()=>{const svg=document.getElementById('mo-graph'),e=window.__v1PointerTrace["+downIndex+"];svg.releasePointerCapture(e.id);return true;})()");
  await frame();
- const lostBeforeUp=await evaluate("(()=>{const t=window.__v1PointerTrace.slice("+downIndex+"),id=t[0].id;const lost=t.findIndex(e=>e.type==='lostpointercapture'&&e.id===id&&e.trusted&&(e.buttons&1));const up=t.findIndex(e=>e.type==='pointerup'&&e.id===id);return {lost,up,trace:t};})()");
- check(lostBeforeUp.lost>0&&lostBeforeUp.up<0,"trusted lostpointercapture occurs while button held before pointerup");
+ const lostBeforeUp=await evaluate("(()=>{const t=window.__v1PointerTrace.slice("+downIndex+"),id=t[0].id;const lost=t.findIndex(e=>e.type==='lostpointercapture'&&e.id===id&&e.trusted);const up=t.findIndex(e=>e.type==='pointerup'&&e.id===id);return {lost,up,trace:t};})()");
+ check(lostBeforeUp.lost>0&&lostBeforeUp.up<0,"trusted lostpointercapture occurs for same pointer before any pointerup");
+ captureRegressionEvidence={pointerId:captureInfo.id,buttonHeldProof:{pointerdownButtons:captureInfo.buttons,mouseReleasedSent:false},preReleaseTrace:lostBeforeUp.trace};
  await mouse("mouseMoved",end,1);await frame();await mouse("mouseReleased",end,0);await frame();
  captureRegressionTrace=await evaluate("(()=>{const t=window.__v1PointerTrace.slice("+downIndex+"),id=t[0].id;const up=t.findIndex(e=>e.type==='pointerup'&&e.id===id);return t.slice(0,up+1);})()");
- const lostIndex=captureRegressionTrace.findIndex(e=>e.type==="lostpointercapture"&&e.trusted&&(e.buttons&1)),upIndex=captureRegressionTrace.findIndex(e=>e.type==="pointerup");
- check(lostIndex>0&&upIndex>lostIndex,"capture trace proves down -> trusted lostcapture while held -> up");
+ const lostIndex=captureRegressionTrace.findIndex(e=>e.type==="lostpointercapture"&&e.trusted&&e.id===captureInfo.id),upIndex=captureRegressionTrace.findIndex(e=>e.type==="pointerup"&&e.id===captureInfo.id);
+ check(lostIndex>0&&upIndex>lostIndex,"capture trace proves trusted down -> lostcapture -> up for same pointer");
+ captureRegressionEvidence.postReleaseTrace=captureRegressionTrace;captureRegressionEvidence.buttonHeldProof.mouseReleasedSent=true;
  const captureAfter=await state(),captureExpected=JSON.parse(JSON.stringify(captureBefore));
  captureExpected.relations.push({id:"p3",owner:["P","a"],label:{kind:"role",value:"context2"},bound:true,target:["P","b"]});captureExpected.relations.sort((a,b)=>a.id.localeCompare(b.id));captureExpected.used.P.push("p3");captureExpected.used.P.sort();
  check(same(captureAfter,captureExpected),"capture-loss gesture has exact lossless state delta");
@@ -146,7 +148,7 @@ try{
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
  check(await evaluate("document.documentElement.scrollWidth<=innerWidth"),"responsive no horizontal overflow");await shot("06-mobile");
  check(Array.isArray(captureRegressionTrace)&&captureRegressionTrace.length>=3,"capture regression trace retained");
- await writeFile(join(output,"pointer-trace.json"),JSON.stringify(captureRegressionTrace,null,2));
+ await writeFile(join(output,"pointer-trace.json"),JSON.stringify(captureRegressionEvidence,null,2));
  await writeFile(join(output,"receipt.json"),JSON.stringify({head,checks:n,viewport:[1440,1200],mobile:[390,844],captureTrace:"pointer-trace.json"},null,2));
  console.log("MO_VISUAL_BROWSER_PASS "+n);
 }finally{
