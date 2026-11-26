@@ -29,7 +29,7 @@ try{
  async function clickPoint(p){await mouse("mouseMoved",p,0);await mouse("mousePressed",p,1);await mouse("mouseReleased",p,0);await frame();}
  const clickId=async id=>clickPoint(await pos("#"+id));
  const set=(id,value,event="input")=>evalv("(()=>{const e=document.getElementById("+JSON.stringify(id)+");e.value="+JSON.stringify(value)+";e.dispatchEvent(new Event("+JSON.stringify(event)+",{bubbles:true}));return true;})()");
- const shot=async name=>{const p=await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false});await writeFile(join(output,name+".png"),Buffer.from(p.data,"base64"));};
+ const shot=async name=>{await evalv("document.querySelector('.sync-panel').scrollIntoView({block:'start'})");await frame();const p=await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false});await writeFile(join(output,name+".png"),Buffer.from(p.data,"base64"));};
  await set("sync-path",'["counter"]');await clickId("sync-locate-node");
  check((await evalv("document.getElementById('sync-selected').textContent")).startsWith("N:"),"V path locates structural N");
  let v=JSON.parse(await evalv("document.getElementById('sync-v').textContent"));check(JSON.stringify(v.occurrences)==='[["counter"]]',"selected N has one V occurrence");
@@ -38,7 +38,7 @@ try{
  g=JSON.parse(await evalv("document.getElementById('sync-g').textContent"));check(g.record[0]==="relations","selected P has exact G relation locator");
  await clickId("sync-locate-node");await clickId("sync-use-edit");check(await evalv("document.getElementById('json-path').value")==='["counter"]',"unique occurrence populates existing JSON edit path");
  await set("json-value","7");await clickId("json-apply");check(await evalv("JSON.parse(document.getElementById('plain').textContent).counter")===7,"R0 JSON edit updates V");
- check((await evalv("document.getElementById('lossless').textContent")).includes('"payload": 7'),"same edit updates exact G view");await shot("01-canonical-sync");
+ check((await evalv("document.getElementById('lossless').textContent")).includes('"payload": 7'),"same edit updates exact G view");await clickId("sync-locate-node");check((await evalv("document.getElementById('sync-selected').textContent")).startsWith("N:"),"same V path locates replacement identity after edit");await shot("01-canonical-sync");
  await clickId("graph");await clickPoint(await glyph("N","value"));
  v=JSON.parse(await evalv("document.getElementById('sync-v').textContent"));check(JSON.stringify(v.occurrences)==='[["a"],["b"]]',"sharing exposes two V occurrences");
  check(await evalv("document.getElementById('sync-use-edit').disabled")===true,"sharing disables ambiguous JSON edit shortcut");
