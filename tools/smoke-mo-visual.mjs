@@ -29,16 +29,24 @@ try{
  await send("Page.enable");await send("Runtime.enable");await send("Emulation.setDeviceMetricsOverride",{width:1440,height:1200,deviceScaleFactor:1,mobile:false});
  await send("Page.navigate",{url:"http://127.0.0.1:"+server.address().port+"/site/mo-studio.html"});
  for(let i=0;i<100;i++){if(await evaluate("!!document.querySelector('#graph-layer [data-key]')"))break;await sleep(100);}
+ // Wait for actual layout/compositor frames after scroll or SVG replacement, not for a guessed timeout.
+ const frame=()=>evaluate("new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r(true))))");
+ await evaluate("window.__v1PointerTrace=[];for(const type of ['pointerdown','pointerup','pointercancel','gotpointercapture','lostpointercapture'])document.addEventListener(type,e=>{const at=document.elementFromPoint(e.clientX,e.clientY);window.__v1PointerTrace.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,port:e.target.getAttribute?.('data-port'),key:e.target.closest?.('[data-key]')?.dataset.key,hit:at?.closest?.('[data-key]')?.dataset.key,hitPort:at?.getAttribute?.('data-port')});if(window.__v1PointerTrace.length>30)window.__v1PointerTrace.shift();},true);true");
  const raw=()=>evaluate("document.getElementById('lossless').textContent");
  const state=async()=>JSON.parse(await raw());
  const find=(s,id)=>s.relations.find(r=>r.id===id);
  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  const expr=(sort,id,port)=>"(()=>{const g=[...document.querySelectorAll('#graph-layer [data-key]')].find(g=>g.dataset.key==="+JSON.stringify(JSON.stringify([sort,id]))+");if(!g)throw Error('missing glyph');const el="+(port?"g.querySelector('[data-port="+port+"]')":"g.querySelector('.mo-shape')")+";const b=el.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2};})()";
- const coords=(sort,id,port)=>evaluate(expr(sort,id,port));
- const button=async id=>evaluate("(()=>{const e=document.getElementById("+JSON.stringify(id)+");e.scrollIntoView({block:'nearest'});const b=e.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2};})()");
+ const coords=async(sort,id,port)=>{
+  await frame();const p=await evaluate(expr(sort,id,port));
+  const hit=await evaluate("(()=>{const h=document.elementFromPoint("+p.x+","+p.y+");return {key:h?.closest('[data-key]')?.dataset.key,port:h?.getAttribute('data-port')};})()");
+  assert.equal(hit.key,JSON.stringify([sort,id]),"actual hit target "+sort+":"+id+" "+JSON.stringify({p,hit}));if(port)assert.equal(hit.port,port,"actual hit port");
+  return p;
+ };
+ const button=async id=>{await frame();const p=await evaluate("(()=>{const e=document.getElementById("+JSON.stringify(id)+");e.scrollIntoView({block:'nearest'});const b=e.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2};})()");await frame();return p;};
  const mouse=(type,p,buttons)=>send("Input.dispatchMouseEvent",{type,x:p.x,y:p.y,button:type==="mouseMoved"?"none":"left",buttons,clickCount:type==="mouseMoved"?0:1});
- async function click(p){await mouse("mouseMoved",p,0);await mouse("mousePressed",p,1);await mouse("mouseReleased",p,0);}
- async function drag(a,b){await mouse("mouseMoved",a,0);await mouse("mousePressed",a,1);for(let i=1;i<=8;i++)await mouse("mouseMoved",{x:a.x+(b.x-a.x)*i/8,y:a.y+(b.y-a.y)*i/8},1);await mouse("mouseReleased",b,0);}
+ async function click(p){await mouse("mouseMoved",p,0);await frame();await mouse("mousePressed",p,1);await mouse("mouseReleased",p,0);await frame();}
+ async function drag(a,b){await mouse("mouseMoved",a,0);await frame();await mouse("mousePressed",a,1);await frame();for(let i=1;i<=8;i++){await mouse("mouseMoved",{x:a.x+(b.x-a.x)*i/8,y:a.y+(b.y-a.y)*i/8},1);await frame();}await mouse("mouseReleased",b,0);await frame();}
  const press=async id=>click(await button(id));
  const set=(id,value)=>evaluate("document.getElementById("+JSON.stringify(id)+").value="+JSON.stringify(value));
  const shot=async name=>{await evaluate("document.getElementById('status').scrollIntoView({block:'start'})");const p=await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false});await writeFile(join(output,name+".png"),Buffer.from(p.data,"base64"));};
@@ -51,7 +59,7 @@ try{
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
  await set("graph-label-kind","role");await set("graph-label-value","context2");
  await drag(await coords("P","a","create"),await coords("P","b"));
- let s=await state();check(same(find(s,"p1")?.owner,["P","a"])&&same(find(s,"p1")?.target,["P","b"]),"mouse create P with P owner and target");
+ let s=await state();if(!same(find(s,"p1")?.owner,["P","a"])||!same(find(s,"p1")?.target,["P","b"])){console.error("P/P gesture diagnostic",JSON.stringify({relations:s.relations,status:await evaluate("document.getElementById('status').textContent"),trace:await evaluate("window.__v1PointerTrace")}));await shot("failure-pp-gesture");}check(same(find(s,"p1")?.owner,["P","a"])&&same(find(s,"p1")?.target,["P","b"]),"mouse create P with P owner and target");
  await drag(await coords("P","p1","target"),await coords("P","p1"));
  check(same(find(await state(),"p1")?.target,["P","p1"]),"self target");
  await click(await coords("P","p1"));await press("graph-unbind");
