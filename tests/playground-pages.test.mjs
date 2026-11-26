@@ -100,6 +100,6 @@ test("Pages workflow deploys main only after tests and uses pinned actions", () 
 test("Browser JS parses as native modules without npm dependencies", () => {
   for (const path of [
     "site/app.js", "site/operations.js", "src/memory-document-provider.js",
-    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs"
+    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs", "tools/smoke-mo-v2.mjs"
   ]) assert.doesNotThrow(() => execFileSync(process.execPath, ["--check", resolve(root, path)]));
 });
