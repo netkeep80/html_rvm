@@ -67,7 +67,7 @@ export function losslessLocators(state,selected){
  const ids=[...(selected.sort==="N"?state.nodes:state.relations).keys()].sort((a,b)=>a.localeCompare(b));
  const record=[selected.sort==="N"?"nodes":"relations",ids.indexOf(selected.id)];
  const roots=state.roots.map((r,i)=>same(r,selected)?["roots",i]:null).filter(Boolean);
- const used=[...state.used[selected.sort]].sort((a,b)=>a.localeCompare(b));
+ const used=[...state.used[selected.sort]].sort();
  return {identity:[selected.sort,selected.id],record,roots,used:["used",selected.sort,used.indexOf(selected.id)]};
 }
 export function syncSnapshot(state,root,selected){

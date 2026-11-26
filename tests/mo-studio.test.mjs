@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {freshVisualId,visualRecords} from "../site/mo-visual-graph.js";
+import {createMOState,losslessMOObject} from "../src/mo-reference.js";
 import {createStudio,examples} from "../site/mo-studio.js";
 import {locateVPath,projectionOccurrences,losslessLocators,syncSnapshot} from "../site/mo-projection-sync.js";
 import {readFileSync,existsSync,mkdtempSync,rmSync} from "node:fs";
@@ -65,4 +66,25 @@ test("V2 sync exposes sharing multiplicity, cycle obstruction and typed identity
  assert.equal(s.action({op:"createRelation",id:"cyc",owner:{sort:"N",id:"root"},label:{kind:"key",value:"self"},target:{sort:"N",id:"root"}}).outcome.status,"OK");
  const cyc=syncSnapshot(s.state,root,{sort:"P",id:"cyc"});assert.equal(cyc.v.ok,false);assert.equal(cyc.v.diagnostic,"JSON_CYCLE");assert.equal(cyc.g.record[0],"relations");
  assert.notEqual(s.lossless(),before);
+});
+
+test("V2 G locators dereference exact mixed-case R0 lossless entries",()=>{
+ const s=createStudio(createMOState());
+ for(const a of [
+  {op:"createNode",id:"A",kind:"number",payload:1},
+  {op:"createNode",id:"a",kind:"number",payload:2},
+  {op:"createRelation",id:"A",owner:{sort:"N",id:"A"},label:{kind:"role",value:"upper"},target:{sort:"N",id:"a"}},
+  {op:"createRelation",id:"a",owner:{sort:"N",id:"a"},label:{kind:"role",value:"lower"},target:{sort:"N",id:"A"}},
+  {op:"setRoots",roots:[{sort:"N",id:"A"},{sort:"P",id:"A"}]}
+ ]) assert.equal(s.action(a).outcome.status,"OK");
+ const g=losslessMOObject(s.state);
+ const at=(obj,path)=>path.reduce((v,k)=>v[k],obj);
+ for(const selected of [{sort:"N",id:"A"},{sort:"N",id:"a"},{sort:"P",id:"A"},{sort:"P",id:"a"}]){
+  const loc=losslessLocators(s.state,selected);
+  assert.equal(at(g,loc.record).id,selected.id);
+  assert.equal(at(g,loc.used),selected.id);
+  for(const root of loc.roots)assert.deepEqual(at(g,root),[selected.sort,selected.id]);
+ }
+ assert.deepEqual(g.used.N.slice(-2),["A","a"]);
+ assert.deepEqual(g.used.P,["A","a"]);
 });
