@@ -394,10 +394,10 @@ export function executeMOSequence(state, actions) {
 
 export function executeMOAtomically(state, actions) {
   let current = state;
-  const history = [];
+  const trace = [];
   for (const action of actions) {
     const transition = executeMO(current, action);
-    history.push({ action: cloneJSON(action), persistence: transition.persistence, outcome: transition.outcome, born: transition.born, dead: transition.dead });
+    trace.push({ action: cloneJSON(action), persistence: transition.persistence, outcome: transition.outcome, born: transition.born, dead: transition.dead });
     if (transition.outcome.status === "REJECT") {
       return {
         state,
@@ -405,7 +405,7 @@ export function executeMOAtomically(state, actions) {
         outcome: { status: "REJECT", diagnostic: transition.outcome.diagnostic, return: null, semanticChange: false },
         born: { N: [], P: [] },
         dead: { N: [], P: [] },
-        history
+        trace: []
       };
     }
     current = transition.state;
@@ -416,7 +416,7 @@ export function executeMOAtomically(state, actions) {
     persistence: persistence(state, current),
     outcome: { status: "OK", diagnostic: null, return: null, semanticChange: serializeLosslessMO(state) !== serializeLosslessMO(current) },
     ...delta,
-    history
+    trace
   };
 }
 
