@@ -3,7 +3,8 @@ import {createServer} from "node:http";
 import {readFile,mkdtemp,rm,mkdir,writeFile} from "node:fs/promises";
 import {resolve,join,extname} from "node:path";
 import {tmpdir} from "node:os";
-import {spawn} from "node:child_process";
+import {spawn,execFileSync} from "node:child_process";
+const head=execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();
 import {buildPages} from "./build-pages.mjs";
 import assert from "node:assert/strict";
 const tmp=await mkdtemp(join(tmpdir(),"mo-visual-"));
@@ -14,7 +15,7 @@ let browser,ws;const sleep=ms=>new Promise(r=>setTimeout(r,ms));let n=0;
 const check=(condition,name)=>{assert.ok(condition,name);console.log("V1 PASS",++n,name);};
 try{
  await mkdir(output,{recursive:true});
- buildPages(root,{version:"01.07",commit:process.env.GITHUB_SHA});
+ buildPages(root,{version:"01.07",commit:head});
  await new Promise(r=>server.listen(0,"127.0.0.1",r));
  browser=spawn(process.env.CHROME_BIN||"google-chrome",["--headless=new","--no-sandbox","--disable-dev-shm-usage","--disable-background-networking","--no-first-run","--remote-debugging-port=0","--user-data-dir="+join(tmp,"chrome"),"about:blank"],{stdio:"ignore"});
  let port;for(let i=0;i<100;i++){try{port=(await readFile(join(tmp,"chrome","DevToolsActivePort"),"utf8")).split("\n")[0];break;}catch{await sleep(100);}}assert.ok(port,"Chromium DevTools port");
@@ -40,7 +41,7 @@ try{
  async function drag(a,b){await mouse("mouseMoved",a,0);await mouse("mousePressed",a,1);for(let i=1;i<=8;i++)await mouse("mouseMoved",{x:a.x+(b.x-a.x)*i/8,y:a.y+(b.y-a.y)*i/8},1);await mouse("mouseReleased",b,0);}
  const press=async id=>click(await button(id));
  const set=(id,value)=>evaluate("document.getElementById("+JSON.stringify(id)+").value="+JSON.stringify(value));
- const shot=async name=>{await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");const p=await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false});await writeFile(join(output,name+".png"),Buffer.from(p.data,"base64"));};
+ const shot=async name=>{await evaluate("document.getElementById('status').scrollIntoView({block:'start'})");const p=await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false});await writeFile(join(output,name+".png"),Buffer.from(p.data,"base64"));};
  check((await state()).nodes.length>0,"initial graph rendered");
  // Setup through existing session controls; V1 mutations below use trusted mouse events.
  await evaluate("window.confirm=()=>true;document.getElementById('graph').click();document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
@@ -82,6 +83,6 @@ try{
  await send("Emulation.setDeviceMetricsOverride",{width:390,height:844,deviceScaleFactor:1,mobile:false});
  await evaluate("document.querySelector('.visual-panel').scrollIntoView({block:'start'})");
  check(await evaluate("document.documentElement.scrollWidth<=innerWidth"),"responsive no horizontal overflow");await shot("05-mobile");
- await writeFile(join(output,"receipt.json"),JSON.stringify({head:process.env.GITHUB_SHA??null,checks:n,viewport:[1440,1200],mobile:[390,844]},null,2));
+ await writeFile(join(output,"receipt.json"),JSON.stringify({head,checks:n,viewport:[1440,1200],mobile:[390,844]},null,2));
  console.log("MO_VISUAL_BROWSER_PASS "+n);
 }finally{ws?.close();browser?.kill();await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true});}
