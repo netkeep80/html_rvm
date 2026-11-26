@@ -37,7 +37,9 @@ jobs:
             echo "html_rvm_head=${{ github.event.pull_request.head.sha }}"
             echo "legacy_expected=9d5f2000aba2c2ece0121f1d6bc84721a8728e7a"
             echo "legacy_actual=$(git -C .pc0/jsonRVM rev-parse HEAD)"
-            echo "corpus_tree_expected=38c6093318d4367ccb844961c92af517901e602e"
+            echo "root_tree_expected=38c6093318d4367ccb844961c92af517901e602e"
+            echo "root_tree_actual=$(git -C .pc0/jsonRVM rev-parse HEAD^{tree})"
+            echo "corpus_tree_expected=91876c9162327a18748c9eb6758cad1fdeaba9c2"
             echo "corpus_tree_actual=$(git -C .pc0/jsonRVM rev-parse HEAD:modules/console/test)"
             echo "--- uname ---"
             uname -a
