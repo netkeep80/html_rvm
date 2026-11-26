@@ -26,15 +26,43 @@ export function cloneJSON(value, depth = 0) {
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) reject("INVALID_PAYLOAD", "Number payload must be finite");
-    return value;
+    return Object.is(value, -0) ? 0 : value;
   }
   if (Array.isArray(value)) return value.map(item => cloneJSON(item, depth + 1));
   if (typeof value === "object" && value !== null && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)) {
     const out = {};
-    for (const key of Object.keys(value)) out[key] = cloneJSON(value[key], depth + 1);
+    for (const key of Object.keys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) reject("INVALID_PAYLOAD", "JSON payload properties must be own data properties");
+      Object.defineProperty(out, key, {
+        value: cloneJSON(descriptor.value, depth + 1),
+        writable: true,
+        enumerable: true,
+        configurable: true
+      });
+    }
     return out;
   }
   reject("INVALID_PAYLOAD", "Payload must be strict JSON data");
+}
+
+function cloneActionForRecord(action) {
+  if (!action || typeof action !== "object" || Array.isArray(action)) return null;
+  const out = {};
+  for (const key of Object.keys(action).sort()) {
+    if (action[key] === undefined) continue;
+    try {
+      Object.defineProperty(out, key, {
+        value: cloneJSON(action[key]),
+        writable: true,
+        enumerable: true,
+        configurable: true
+      });
+    } catch (error) {
+      if (!(error instanceof Reject)) throw error;
+    }
+  }
+  return out;
 }
 
 export function jsonEqual(a, b) {
@@ -120,7 +148,7 @@ export function normalizeNode(kind, payload) {
   }
   if (kind === "number") {
     if (typeof payload !== "number" || !Number.isFinite(payload)) reject("INVALID_PAYLOAD");
-    return { kind, payload };
+    return { kind, payload: Object.is(payload, -0) ? 0 : payload };
   }
   if (kind === "string") {
     if (typeof payload !== "string") reject("INVALID_PAYLOAD");
@@ -160,9 +188,12 @@ export function validateMOState(state) {
   if (!(state?.nodes instanceof Map) || !(state?.relations instanceof Map) || !(state?.used?.N instanceof Set) || !(state?.used?.P instanceof Set) || !Array.isArray(state.roots)) {
     reject("INVALID_STATE_SHAPE");
   }
+  for (const id of state.used.N) requireId(id);
+  for (const id of state.used.P) requireId(id);
   for (const [id, node] of state.nodes) {
     requireId(id);
-    normalizeNode(node.kind, node.payload);
+    const normalized = normalizeNode(node.kind, node.payload);
+    if (!jsonEqual(node.payload, normalized.payload)) reject("NON_CANONICAL_PAYLOAD");
     if (!state.used.N.has(id)) reject("LIVE_ID_NOT_USED");
   }
   for (const [id, relation] of state.relations) {
@@ -385,7 +416,7 @@ export function executeMOSequence(state, actions) {
   const history = [];
   for (const action of actions) {
     const transition = executeMO(current, action);
-    history.push({ action: cloneJSON(action), persistence: transition.persistence, outcome: transition.outcome, born: transition.born, dead: transition.dead });
+    history.push({ action: cloneActionForRecord(action), persistence: transition.persistence, outcome: transition.outcome, born: transition.born, dead: transition.dead });
     current = transition.state;
     if (transition.outcome.status === "REJECT") break;
   }
@@ -397,7 +428,7 @@ export function executeMOAtomically(state, actions) {
   const trace = [];
   for (const action of actions) {
     const transition = executeMO(current, action);
-    trace.push({ action: cloneJSON(action), persistence: transition.persistence, outcome: transition.outcome, born: transition.born, dead: transition.dead });
+    trace.push({ action: cloneActionForRecord(action), persistence: transition.persistence, outcome: transition.outcome, born: transition.born, dead: transition.dead });
     if (transition.outcome.status === "REJECT") {
       return {
         state,
@@ -455,8 +486,16 @@ export function deserializeLosslessMO(value) {
   if (!obj || obj.$mo !== "np-state/1" || !Array.isArray(obj.nodes) || !Array.isArray(obj.relations) || !Array.isArray(obj.roots) || !obj.used) reject("INVALID_SERIALIZATION");
   const state = createMOState();
   if (!Array.isArray(obj.used.N) || !Array.isArray(obj.used.P)) reject("INVALID_SERIALIZATION");
-  for (const id of obj.used.N) state.used.N.add(requireId(id));
-  for (const id of obj.used.P) state.used.P.add(requireId(id));
+  for (const id of obj.used.N) {
+    id = requireId(id);
+    if (state.used.N.has(id)) reject("INVALID_SERIALIZATION");
+    state.used.N.add(id);
+  }
+  for (const id of obj.used.P) {
+    id = requireId(id);
+    if (state.used.P.has(id)) reject("INVALID_SERIALIZATION");
+    state.used.P.add(id);
+  }
   for (const node of obj.nodes) {
     const id = requireId(node.id);
     if (state.nodes.has(id)) reject("INVALID_SERIALIZATION");
@@ -465,12 +504,13 @@ export function deserializeLosslessMO(value) {
   for (const relation of obj.relations) {
     const id = requireId(relation.id);
     if (state.relations.has(id)) reject("INVALID_SERIALIZATION");
-    const bound = Boolean(relation.bound);
+    if (typeof relation.bound !== "boolean") reject("INVALID_SERIALIZATION");
+    if (!relation.bound && relation.target !== null) reject("INVALID_SERIALIZATION");
     state.relations.set(id, {
       owner: endpointFromJSON(relation.owner),
       label: normalizeLabel(relation.label),
-      bound,
-      target: bound ? endpointFromJSON(relation.target) : null
+      bound: relation.bound,
+      target: relation.bound ? endpointFromJSON(relation.target) : null
     });
   }
   state.roots = obj.roots.map(endpointFromJSON);
