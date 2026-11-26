@@ -252,11 +252,24 @@ export function execute(state,{limit=500}={}){
   const slot=g.role(root,'result'),body=g.role(root,'body');
   // DATA projection has no execution events; return original state unchanged.
   if(g.tag(body)==='retain')return {state,result:g.read(g.role(body,'S')),events,transitions:[]};
+  const frame={rho:slot,O:null,capture:null};
+  // Top-level vector commits each completed child independently. A failing child
+  // cannot publish tentative graph changes or events; later children are not run.
+  if(g.tag(body)==='family'&&g.payload(body).mode==='vector'){
+    let last=null;
+    for(const [,r] of g.children(body,'index').sort((a,b)=>a[1].label.value-b[1].label.value)){
+      const before=g.state,eventCount=events.length,transitionCount=g.transitions.length;
+      try{last=invoke(r.target,frame);}
+      catch(error){return {state:before,result:null,committedResult:last?projectPlainJSON(before,last):null,
+        events:events.slice(0,eventCount),transitions:g.transitions.slice(0,transitionCount),diagnostic:error.message};}
+    }
+    return {state:g.state,result:last?g.read(last):null,events,transitions:g.transitions};
+  }
   try {
-    const v=invoke(body,{rho:slot,O:null,capture:null});
+    const v=invoke(body,frame);
     return {state:g.state,result:v?g.read(v):null,events,transitions:g.transitions};
   }catch(error){
-    // Research boundary: whole attempt rollback; no tentative events published as committed.
+    // One non-vector invocation is a bounded atomic attempt in this prototype.
     return {state,result:null,events:[],transitions:[],diagnostic:error.message};
   }
 }
