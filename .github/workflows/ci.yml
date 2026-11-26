@@ -27,6 +27,15 @@ jobs:
         run: npm test
       - name: MO Studio browser smoke on packaged Pages (Chromium)
         run: node tools/smoke-mo-browser.mjs
+      - name: V1 visual graph trusted Chromium interactions
+        run: node tools/smoke-mo-visual.mjs
+      - name: Retain visual evidence (exact HEAD)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mo-visual-evidence
+          path: mo-visual-evidence/
+          if-no-files-found: warn
 
   repo-guard:
     name: RepoGuard exact BASE/HEAD — compiler

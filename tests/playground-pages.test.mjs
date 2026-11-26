@@ -62,7 +62,8 @@ test("Pages artifact includes all modules, exact version marker and root redirec
     const out = join(temp, "dist");
     const commit = "a".repeat(40);
     const result = buildPages(out, { commit, branch: "main", version: "01.04" });
-    assert.equal(result.files.length, 18);
+    assert.equal(result.files.length, 19);
+    assert.ok(result.files.includes("site/mo-visual-graph.js"));
     for (const relative of result.files) assert.equal(existsSync(join(out, relative)), true, relative);
     assert.match(readFileSync(join(out, "index.html"), "utf8"), /url=\.\/site\//);
     const meta = JSON.parse(readFileSync(join(out, "site/build-info.json"), "utf8"));
