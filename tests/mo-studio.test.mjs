@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {freshVisualId,visualRecords} from "../site/mo-visual-graph.js";
 import {createStudio,examples} from "../site/mo-studio.js";
 import {readFileSync,existsSync,mkdtempSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
@@ -31,8 +32,18 @@ test("MO Studio atomic reject and invalid imports preserve full state",()=>{
 test("MO Studio Pages artifact includes actual R0 modules and accessible entry",()=>{
  const d=mkdtempSync(join(tmpdir(),"mo-studio-"));
  try{const r=buildPages(join(d,"dist"),{version:"01.07"});
- for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
+ for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","site/mo-visual-graph.js","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
  assert.match(readFileSync(join(r.destination,"site/index.html"),"utf8"),/href="\.\/mo-studio.html"/);
  for(const f of ["site/mo-studio.js","site/mo-studio-ui.js"])execFileSync(process.execPath,["--check",join(r.destination,f)]);
  }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test("visual identities are typed and allocator excludes dead IDs",()=>{
+ const s=createStudio(examples.graph());
+ assert.equal(s.action({op:"createNode",id:"a",kind:"entity"}).outcome.status,"OK");
+ assert.deepEqual(visualRecords(s.state).filter(x=>x.id==="a").map(x=>x.sort),["N","P"]);
+ const id=freshVisualId(s.state,"N");
+ assert.equal(s.action({op:"createNode",id,kind:"entity"}).outcome.status,"OK");
+ assert.equal(s.action({op:"deleteNode",id}).outcome.status,"OK");
+ assert.notEqual(freshVisualId(s.state,"N"),id);
 });
