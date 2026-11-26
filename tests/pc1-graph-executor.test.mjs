@@ -121,3 +121,34 @@ test('PC1 contextual and structural defaults are different graph terms',()=>{
   assert.equal(a.x.result,environment.version);assert.equal(b.x.result,environment.version);
   assert.notEqual(serializeLosslessMO(a.x.state),serializeLosslessMO(b.x.state));
 });
+
+test('PC1 exact pre-execution package image includes definitions and environment',()=>{
+  const cases=[
+    [oldWhere,{}],[compactWhere,{profile:'relation-first'}],
+    [{'rmvm/version':'rmvm_version','json/meta':'meta'},{profile:'rose'}],
+    [{$rel:'identity',$obj:{$ref:'capture'}},{definitions:{f:{kind:'closure',capture:'captured',body:{$obj:{$ref:'capture'},$rel:'identity'}}}}],
+    [{$rel:'not',$obj:'0'},{definitions:{not:{kind:'table',entries:{'0':'1','1':'0'}}}}],
+    [{$ref:'x',$rel:'literal'},{profile:'data'}]
+  ];
+  for(const [j,opts] of cases){
+    const {state}=run(j,opts),pack=objectivate(state,{packageImage:true});
+    const rebuilt=subjectivate(JSON.stringify(pack.source),pack);
+    assert.equal(serializeLosslessMO(rebuilt.state),serializeLosslessMO(state));
+  }
+  const {x}=run(oldWhere);
+  assert.throws(()=>objectivate(x.state,{packageImage:true}),/OUTSIDE_CANONICAL_PACKAGE_IMAGE/);
+});
+test('PC1 completion deduplicates only identical typed endpoints',()=>{
+  equal(complete({O:[N('a'),N('a')],R:[N('r')],S:[null]}),{O:N('a'),R:N('r'),S:null});
+  assert.throws(()=>complete({O:[N('a'),P('a')],R:[N('r')],S:[null]}),/AMBIGUOUS_COMPLETION/);
+});
+test('PC1 contextual/structural default changes destination, not merely source tag',()=>{
+  const a=run('rmvm/version'),b=run('rmvm/version',{defaults:'structural'});
+  const aSlot=role(a.state,a.state.roots[0],'result')[1].target;
+  const bSlot=role(b.state,b.state.roots[0],'result')[1].target;
+  assert.equal(a.x.state.relations.get(aSlot.id).bound,true);
+  assert.equal(b.x.state.relations.get(bSlot.id).bound,false);
+  const bBody=role(b.state,b.state.roots[0],'body')[1].target;
+  const sourceSlot=role(b.state,bBody,'sourceSlot')[1].target;
+  assert.equal(b.x.state.nodes.get(b.x.state.relations.get(sourceSlot.id).target.id).payload,environment.version);
+});
