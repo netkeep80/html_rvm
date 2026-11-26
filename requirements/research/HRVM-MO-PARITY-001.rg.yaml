@@ -11,3 +11,5 @@ relations:
     target: { kind: artifact, path: "docs/S1B-PARITY-COMPACT.md" }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: ".github/workflows/pc0-legacy-oracle.yml" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/pc0/BASELINE.md" }

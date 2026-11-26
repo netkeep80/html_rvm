@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/pc0-legacy-oracle.yml"
+      - "docs/pc0/**"
+      - "docs/S1B-PARITY-COMPACT.md"
+      - "requirements/research/HRVM-MO-PARITY-001.rg.yaml"
 
 permissions:
   contents: read
