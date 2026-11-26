@@ -1,4 +1,5 @@
 import {mountVisualGraph} from "./mo-visual-graph.js";
+import {locateVPath,syncSnapshot} from "./mo-projection-sync.js";
 import {createStudio} from "./mo-studio.js";
 const $=id=>document.getElementById(id);
 const studio=createStudio();
@@ -44,13 +45,13 @@ function parseAction(){
  return a;
 }
 function notify(t){$("status").textContent=t.outcome.status+(t.outcome.diagnostic?" · "+t.outcome.diagnostic:"")+(t.message?" · "+t.message:"")+(t.session?" · новый сеанс":"");$("status").className=t.outcome.status==="REJECT"?"reject":"";}
-function run(fn){try{const t=fn();notify(t);if(t.session){selected=null;visual?.reset();}render();}catch(e){$("status").textContent="INPUT_ERROR · "+e.message;$("status").className="reject";}}
+function run(fn){try{const t=fn();notify(t);if(t.session){selected=null;$("sync-path").value="[]";visual?.reset();}render();}catch(e){$("status").textContent="INPUT_ERROR · "+e.message;$("status").className="reject";}}
 function records(){
  const s=studio.state;const tbody=$("records");tbody.replaceChildren();const filter=$("filter").value.toLowerCase();
  for(const [sort,map] of [["N",s.nodes],["P",s.relations]])for(const [id,r] of map){
   if(!id.toLowerCase().includes(filter))continue;
   const tr=element("tr");if(selected?.sort===sort&&selected.id===id)tr.className="selected";
-  const button=element("button",sort+":"+id);button.type="button";button.onclick=()=>{selected={sort,id};records();fields();inspect();visual?.render();};
+  const button=element("button",sort+":"+id);button.type="button";button.onclick=()=>selectEndpoint({sort,id});
   const first=element("td");first.append(button);tr.append(first,element("td",sort==="N"?r.kind:ep(r.owner)),element("td",pretty(sort==="N"?r.payload:r.label)),element("td",sort==="P"?r.bound?ep(r.target):"∅":"—"));tbody.append(tr);
  }
 }
@@ -65,6 +66,23 @@ function projection(){
  const value=$("projection-root").value;const p=studio.projection(value?JSON.parse(value):undefined);
  $("plain").textContent=p.ok?pretty(p.value):"PROJECTION UNDEFINED · "+p.diagnostic;
 }
+function projectionRoot(){const value=$("projection-root").value;return value?JSON.parse(value):studio.state.roots[0];}
+function readSyncPath(){try{const p=JSON.parse($("sync-path").value);return Array.isArray(p)?{ok:true,path:p}:{ok:false,diagnostic:"JSON_PATH_INVALID"};}catch{return {ok:false,diagnostic:"JSON_PATH_INVALID"};}}
+function renderSync(){
+ const root=projectionRoot(),snap=syncSnapshot(studio.state,root,selected),raw=readSyncPath();
+ $("sync-selected").textContent=selected?ep(selected):"—";
+ $("sync-v").textContent=pretty(snap.v.ok?{status:"DEFINED",occurrences:snap.v.paths,truncated:snap.v.truncated}:{status:"UNDEFINED",diagnostic:snap.v.diagnostic,occurrences:[]});
+ $("sync-g").textContent=snap.g?pretty(snap.g):"—";
+ $("sync-locality").textContent=snap.canonical.ok?"LOCAL · canonical JSON tree · path edit is uniquely defined":"NONLOCAL · "+snap.canonical.diagnostic+" · JSON edit shortcut disabled";
+ const located=raw.ok?locateVPath(studio.state,root,raw.path):{ok:false,diagnostic:raw.diagnostic,node:null,relation:null};
+ $("sync-path-status").textContent=located.ok?"V path → "+ep(located.node)+(located.relation?" via "+ep(located.relation):" · root"):"V path unavailable · "+located.diagnostic;
+ $("sync-locate-node").disabled=!located.ok;
+ $("sync-locate-relation").disabled=!located.ok||!located.relation;
+ $("sync-use-edit").disabled=!snap.editablePath;
+ $("sync-use-edit").dataset.path=snap.editablePath?JSON.stringify(snap.editablePath):"";
+}
+function selectEndpoint(value){selected=value;inspect();records();fields();renderSync();visual?.render();}
+
 function render(){
  const s=studio.state;
  $("n-count").textContent=s.nodes.size;$("p-count").textContent=s.relations.size;$("used-count").textContent=s.used.N.size+" / "+s.used.P.size;$("root-count").textContent=s.roots.length;
@@ -72,14 +90,17 @@ function render(){
  const selector=$("projection-root");const previous=selector.value;selector.replaceChildren();
  for(const r of s.roots)selector.append(option(pretty(r),ep(r)));
  if([...selector.options].some(o=>o.value===previous))selector.value=previous;
- projection();
+ projection();renderSync();
  $("lossless").textContent=pretty(JSON.parse(studio.lossless()));
  const t=studio.last;if(t){const {state,...rest}=t;$("transition").textContent=pretty(rest);}else $("transition").textContent="—";
  const tree=studio.treeStatus();$("tree-status").textContent=tree.ok?"Canonical tree · редактирование разрешено":"Редактирование недоступно · "+tree.diagnostic;$("json-apply").disabled=!tree.ok;
  visual?.render();
 }
 for(const op of Object.keys(operations))$("op").append(option(op,op));
-$("op").onchange=fields;$("filter").oninput=records;$("projection-root").onchange=projection;
+$("op").onchange=fields;$("filter").oninput=records;$("projection-root").onchange=()=>{projection();renderSync();};$("sync-path").oninput=renderSync;
+$("sync-locate-node").onclick=()=>{const raw=readSyncPath(),located=raw.ok?locateVPath(studio.state,projectionRoot(),raw.path):raw;if(located.ok)selectEndpoint(located.node);};
+$("sync-locate-relation").onclick=()=>{const raw=readSyncPath(),located=raw.ok?locateVPath(studio.state,projectionRoot(),raw.path):raw;if(located.ok&&located.relation)selectEndpoint(located.relation);};
+$("sync-use-edit").onclick=()=>{const snap=syncSnapshot(studio.state,projectionRoot(),selected);if(snap.editablePath){$("json-path").value=JSON.stringify(snap.editablePath);$("sync-path-status").textContent="Occurrence copied to JSON edit path";}};
 $("action-form").onsubmit=e=>{e.preventDefault();run(()=>studio.action(parseAction()));};
 $("atomic").onclick=()=>run(()=>studio.atomic(JSON.parse($("batch").value)));
 $("json-form").onsubmit=e=>{e.preventDefault();run(()=>{const op=$("json-op").value;return studio.edit({op,path:JSON.parse($("json-path").value),...(op==="remove"?{}:{value:JSON.parse($("json-value").value)})});});};
@@ -87,5 +108,5 @@ $("import").onclick=()=>{if(confirm("Заменить текущий сеанс 
 for(const id of ["tree","graph","empty"])$(id).onclick=()=>{if(confirm("Заменить текущий сеанс МО?")){selected=null;run(()=>studio.reset(id));}};
 $("export").onclick=()=>{const url=URL.createObjectURL(new Blob([studio.lossless()],{type:"application/json"}));const a=element("a");a.href=url;a.download="mo-state.json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 fetch("./build-info.json").then(r=>r.json()).then(i=>{$("version").textContent=/^[0-9]{2}\.[0-9]{2}$/.test(i.version)?i.version:"";}).catch(()=>{});
-visual=mountVisualGraph({studio,getSelected:()=>selected,select:e=>{selected=e;inspect();records();fields();visual.render();},run});
+visual=mountVisualGraph({studio,getSelected:()=>selected,select:selectEndpoint,run});
 render();
