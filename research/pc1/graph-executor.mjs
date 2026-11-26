@@ -94,7 +94,7 @@ function graph(state=createMOState()){
 
 // Environment metadata is an explicit graph input; no source or JS closure survives compile.
 export function subjectivate(source,{profile='body',defaults='context',environment,definitions={}}={}){
-  if(!['body','rose','data'].includes(profile)||!['context','structural'].includes(defaults))fail('PROFILE');
+  if(!['body','rose','data','relation-first'].includes(profile)||!['context','structural'].includes(defaults))fail('PROFILE');
   const j=parseStrict(source),g=graph();
   const root=g.entity('program',{profile,defaults});
   const dict=g.entity('dictionary');g.link(root,'dictionary',dict);
@@ -126,6 +126,19 @@ export function subjectivate(source,{profile='body',defaults='context',environme
       const e=g.entity('family',{mode:'vector'});v.forEach((c,i)=>g.edge(e,Index(i),body(c)));return e;
     }
     if(!object(v))fail('BODY_TYPE');
+    if(profile==='relation-first'){
+      const keys=Object.keys(v);
+      if(keys.length!==1||roleKeys.includes(keys[0])||keys[0]==='$ref')fail('RELATION_FIRST_FORM');
+      const name=keys[0],args=v[name];
+      if(!Array.isArray(args)||args.length>2)fail('RELATION_FIRST_ARITY');
+      const o=args.length?operand(args[0]):null;
+      let s=null;
+      if(args.length===2){
+        if(name==='where'){s=term('body');g.link(s,'value',body(args[1]));}
+        else s=operand(args[1]);
+      }
+      return call(defRef(name),o,s,(o?4:0)|2|(s?1:0));
+    }
     if(own(v,'$ref'))fail('BODY_REFERENCE_UNSUPPORTED');
     if(roleKeys.some(k=>own(v,k))){
       if(!own(v,'$rel')||Object.keys(v).some(k=>!roleKeys.includes(k))||typeof v.$rel!=='string')fail('ROLE_FORM');
@@ -292,6 +305,13 @@ export function objectivate(state){
     }
     if(t!=='call')fail('BODY_PROJECTION');
     const m=g.payload(e).mask,name=g.payload(g.role(e,'R')).name;
+    if(p==='relation-first'){
+      if((m&1)&&!(m&4))fail('RELATION_FIRST_S_ONLY');
+      const args=[];
+      if(m&4)args.push(operand(g.role(e,'O')));
+      if(m&1)args.push(operand(g.role(e,'S')));
+      return Object.fromEntries([[name,args]]);
+    }
     if(m===2)return name;
     const v={$rel:name};
     if(m&4)v.$obj=operand(g.role(e,'O'));
