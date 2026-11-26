@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-COMPACT-001
+normative: "### HRVM-MO-COMPACT-001 — HTML RVM MUST обеспечивать строго меньший агрегат minified UTF-8 полной сопоставимой исполняемой JSON-программы C и её сценарных зависимостей при функциональной эквивалентности и авторской оценке ясности, с по-сценарным сравнением старого и нового источника, отдельным учётом данных и авторским решением по каждому росту."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-EXEC-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-PARITY-001 }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/S1B-PARITY-COMPACT.md" }

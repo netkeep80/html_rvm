@@ -21,3 +21,7 @@
 Первоначальный BASE содержит только LICENSE и не имеет Requirement authority. Автор разрешил **один bootstrap merge с известным RepoGuard RED**, но не признал RED проверкой PASS, не разрешил отключать компилятор и не распространил исключение на будущие PR. Точная диагностика и источник решения — в BOOTSTRAP-ACCEPTANCE.md.
 
 S0, S1A, S1A.1, VERS-001 и REQ-NORM-001 завершены. После отдельной приёмки REQ-AUTH-001 — семантическое ядро МО / executable RVM, затем явная сущность сохранения и независимый DBMS adapter.
+
+## Дельта executable JSON / parity / compactness — 26.11.2026
+
+Авторская директива [#18/7202378622](https://github.com/netkeep80/html_rvm/issues/18#issuecomment-7202378622) и [#29/7202383209](https://github.com/netkeep80/html_rvm/issues/29#issuecomment-7202383209) задаёт новый обязательный критерий практической программы. Нормативная регистрация отдельными кандидатами в `requirements/research/`: HRVM-MO-EXEC-001 (исполняемая проекция), HRVM-MO-PARITY-001 (функциональная эквивалентность), HRVM-MO-COMPACT-001 (компактность и ясность). Флаги lifecycle кандидатов не утверждают их принятие; отдельный независимый аудит и явная авторская приёмка exact HEAD необходимы. Не менять исторический partition REQ-AUTH-001 и его frozen evidence; три новых research IDs учитываются отдельно от 62 исторических top-level IDs. Никаких verified_by до полного исполняемого свидетельства. [Маршрут и протокол](S1B-PARITY-COMPACT.md).
