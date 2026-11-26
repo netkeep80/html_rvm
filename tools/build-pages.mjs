@@ -10,7 +10,7 @@ const staticFiles = [
   "site/index.html", "site/styles.css", "site/app.js", "site/operations.js",
   "src/document-port-error.js", "src/strict-json.js",
   "src/memory-document-provider.js", "src/working-session.js",
-  "site/mo-studio.html", "site/mo-studio.css", "site/mo-studio.js", "site/mo-studio-ui.js",
+  "site/mo-studio.html", "site/mo-studio.css", "site/mo-studio.js", "site/mo-studio-ui.js", "site/mo-visual-graph.js",
   "src/mo-core.js", "src/mo-json.js", "src/mo-reference.js"
 ];
 
