@@ -1,0 +1,41 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-UNIFIED-STUDIO-001
+normative: "### HRVM-MO-UNIFIED-STUDIO-001 — Unified MO Studio MUST provide a single Natural JSON, as-network, Context/Result and execution timeline workspace, with exact relation identities and B/E references, explicit draft/applied/branch/layout separation, real shared Run/Step execution and atomic reject, reflective source-role mutation and re-execution, no hidden persistence, and migration of retained legacy obligations before removing old interfaces. Stage 3 partial implementation is not completion or production acceptance; carrier selection and historical where copy/alias parity remain OPEN. Authority: Issue #45 and author decision #45/7220762521."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-PC1-J1-001 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "research/pc1/j1-natural-json.mjs" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/unified-session.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/unified-studio.html" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/unified-studio.css" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "site/unified-studio.js" }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "tools/build-pages.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/unified-session.test.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/playground-pages.test.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-unified.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: ".github/workflows/ci.yml" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/UNIFIED-STUDIO-MIGRATION.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "README.md" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-browser.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-visual.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-v2.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-v3.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/mo-studio.test.mjs" }

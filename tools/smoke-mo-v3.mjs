@@ -12,7 +12,7 @@ const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=
 const server=createServer(async(req,res)=>{try{const u=new URL(req.url,"http://localhost"),p=resolve(root,"."+u.pathname);if(!p.startsWith(root+"/"))throw Error("path");const b=await readFile(p);res.writeHead(200,{"content-type":types[extname(p)]??"application/octet-stream"});res.end(b);}catch{res.writeHead(404);res.end();}});
 let browser,ws,n=0;const sleep=ms=>new Promise(r=>setTimeout(r,ms));const check=(v,name)=>{assert.ok(v,name);console.log("V3 PASS",++n,name);};
 try{
- await mkdir(output,{recursive:true});buildPages(root,{version:"01.11",commit:head});await new Promise(r=>server.listen(0,"127.0.0.1",r));
+ await mkdir(output,{recursive:true});buildPages(root,{version:"01.11",commit:head,legacyRegression:true});await new Promise(r=>server.listen(0,"127.0.0.1",r));
  browser=spawn(process.env.CHROME_BIN||"google-chrome",["--headless=new","--no-sandbox","--disable-dev-shm-usage","--disable-background-networking","--no-first-run","--remote-debugging-port=0","--user-data-dir="+join(tmp,"chrome"),"about:blank"],{stdio:"ignore"});
  let port;for(let i=0;i<100;i++){try{port=(await readFile(join(tmp,"chrome","DevToolsActivePort"),"utf8")).split("\n")[0];break;}catch{await sleep(100);}}assert.ok(port);
  const targets=await (await fetch("http://127.0.0.1:"+port+"/json/list")).json();ws=new WebSocket(targets.find(t=>t.type==="page").webSocketDebuggerUrl);await new Promise((ok,fail)=>{ws.addEventListener("open",ok,{once:true});ws.addEventListener("error",fail,{once:true});});
