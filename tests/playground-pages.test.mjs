@@ -62,7 +62,8 @@ test("Pages artifact includes all modules, exact version marker and root redirec
     const out = join(temp, "dist");
     const commit = "a".repeat(40);
     const result = buildPages(out, { commit, branch: "main", version: "01.04" });
-    assert.equal(result.files.length, 21);
+    assert.equal(result.files.length, 27);
+    for (const path of ["site/unified-studio.html", "site/unified-studio.css", "site/unified-studio.js", "site/unified-session.js", "research/pc1/j1-natural-json.mjs", "research/pc1/e1-witness.mjs"]) assert.ok(result.files.includes(path), path);
     assert.ok(result.files.includes("site/mo-visual-graph.js"));
     assert.ok(result.files.includes("site/mo-projection-sync.js"));
     assert.ok(result.files.includes("site/mo-transition-observer.js"));
@@ -101,6 +102,6 @@ test("Pages workflow deploys main only after tests and uses pinned actions", () 
 test("Browser JS parses as native modules without npm dependencies", () => {
   for (const path of [
     "site/app.js", "site/operations.js", "src/memory-document-provider.js",
-    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs", "tools/smoke-mo-v2.mjs", "tools/smoke-mo-v3.mjs", "site/mo-transition-observer.js"
+    "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs", "tools/smoke-mo-v2.mjs", "tools/smoke-mo-v3.mjs", "site/mo-transition-observer.js", "site/unified-session.js", "site/unified-studio.js", "research/pc1/j1-natural-json.mjs"
   ]) assert.doesNotThrow(() => execFileSync(process.execPath, ["--check", resolve(root, path)]));
 });
