@@ -9,7 +9,7 @@ import {buildPages} from "./build-pages.mjs";
 const head=execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();
 const tmp=await mkdtemp(join(tmpdir(),"mo-unified-")),root=join(tmp,"dist"),output=resolve(process.env.MO_UNIFIED_EVIDENCE||"mo-unified-evidence");
 const types={".html":"text/html; charset=utf-8",".js":"text/javascript; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".css":"text/css; charset=utf-8",".json":"application/json"};
-const server=createServer(async(req,res)=>{try{const u=new URL(req.url,"http://localhost"),p=resolve(root,"."+u.pathname);if(!p.startsWith(root+"/"))throw Error("path");const b=await readFile(p);res.writeHead(200,{"content-type":types[extname(p)]??"application/octet-stream"});res.end(b);}catch{res.writeHead(404);res.end();}});
+const server=createServer(async(req,res)=>{try{const u=new URL(req.url,"http://localhost"),p=resolve(root,"."+u.pathname+(u.pathname.endsWith("/")?"index.html":""));if(!p.startsWith(root+"/"))throw Error("path");const b=await readFile(p);res.writeHead(200,{"content-type":types[extname(p)]??"application/octet-stream"});res.end(b);}catch{res.writeHead(404);res.end();}});
 let browser,ws,n=0;const sleep=ms=>new Promise(r=>setTimeout(r,ms));const check=(v,name)=>{assert.ok(v,name);console.log("UNIFIED PASS",++n,name);};
 try{
  await mkdir(output,{recursive:true});buildPages(root,{version:"01.11",commit:head});await new Promise(r=>server.listen(0,"127.0.0.1",r));
