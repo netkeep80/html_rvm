@@ -73,11 +73,11 @@ function committedSession(tx) {
 }
 
 function beginTransaction(session) {
-  return { ...cloneSession(session), attemptedTrace: [], executionFuel: DEFAULT_EXECUTION_FUEL };
+  return { ...cloneSession(session), attemptedTrace: [], readDependencies: [], executionFuel: DEFAULT_EXECUTION_FUEL };
 }
 
 function beginProbeTransaction(tx) {
-  return { ...cloneSession(tx), attemptedTrace: [], executionFuel: tx.executionFuel };
+  return { ...cloneSession(tx), attemptedTrace: [], readDependencies: [], executionFuel: tx.executionFuel };
 }
 
 function record(tx, event) {
@@ -90,6 +90,47 @@ function requireRelation(state, slot) {
   if (!relation) reject("MISSING_SLOT");
   if (!relation.bound) reject("UNBOUND_SLOT");
   return relation;
+}
+
+// Semantic reads, not implementation-wide validation scans. Keep this ledger
+// separate from committed/attempted operation traces and from the persistent state.
+function observeReads(tx, ids) {
+  for (const id of ids) tx.readDependencies.push(id);
+}
+
+function readRelation(tx, slot) {
+  const relation = requireRelation(tx.state, slot);
+  observeReads(tx, [slot.id]);
+  return relation;
+}
+
+// Use the existing JSON projector as the sole value authority. On success,
+// collect every structural P traversed by that projection, by identity.
+// Rebinding any such P may change the projected value. Shared N descendants
+// are visited once for the footprint (the projector retains its own semantics).
+function projectValue(tx, endpoint) {
+  const value = projectPlainJSON(tx.state.mo, endpoint);
+  const outgoing = new Map();
+  for (const [id, relation] of tx.state.mo.relations) {
+    if (relation.owner.sort !== "N" ||
+        (relation.label.kind !== "key" && relation.label.kind !== "index")) continue;
+    const key = relation.owner.id;
+    if (!outgoing.has(key)) outgoing.set(key, []);
+    outgoing.get(key).push([id, relation]);
+  }
+  const pending = [endpoint.id];
+  const seen = new Set();
+  while (pending.length) {
+    const node = pending.pop();
+    if (seen.has(node)) continue;
+    seen.add(node);
+    for (const [id, relation] of outgoing.get(node) ?? []) {
+      observeReads(tx, [id]);
+      // A successful projection already established bound N targets.
+      pending.push(relation.target.id);
+    }
+  }
+  return value;
 }
 
 function frameRecord(state, frameId) {
@@ -218,8 +259,9 @@ function structuralRelations(state, owner) {
   return out;
 }
 
-function objectMembers(state, slot) {
-  const relation = requireRelation(state, slot);
+function objectMembers(tx, slot) {
+  const state = tx.state;
+  const relation = readRelation(tx, slot);
   if (relation.target.sort !== "N") reject("ENTITY_OBJECT_REQUIRED");
   const node = state.mo.nodes.get(relation.target.id);
   if (!node || node.kind !== "object") reject("ENTITY_OBJECT_REQUIRED");
@@ -347,6 +389,7 @@ function resolveWithLoad(tx, frameId, address) {
   try {
     if (parsed.kind === "global") stageLoadNamespace(tx, parsed.name);
     const resolved = resolveParsedExisting(tx, frameId, parsed);
+    observeReads(tx, resolved.readSlots);
     record(tx, { op: "resolve", frame: frameId, address, slot: resolved.slot.id, readSlots: resolved.readSlots, status: "OK" });
     return resolved;
   } catch (error) {
@@ -420,6 +463,7 @@ function planOneLValue(tx, frameId, address) {
     }
     pathSlots.push(slot.id);
   }
+  observeReads(tx, pathSlots);
   const result = { address, slot, pathSlots, parsed };
   record(tx, { op: "plan-lvalue", frame: frameId, address, slot: slot.id, pathSlots });
   return result;
@@ -447,7 +491,7 @@ export function stagePlanLValuesPC2A1(session, frameId, addresses, options = {})
 }
 
 function exactReference(tx, slot) {
-  const relation = requireRelation(tx.state, slot);
+  const relation = readRelation(tx, slot);
   if (relation.target.sort !== "N") return null;
   const node = tx.state.mo.nodes.get(relation.target.id);
   if (!node || node.kind !== "object") return null;
@@ -455,9 +499,10 @@ function exactReference(tx, slot) {
   const refEntries = structural.filter(([, member]) => member.label.kind === "key" && member.label.value === "$ref");
   if (refEntries.length === 0) return null;
   if (structural.length !== 1 || refEntries.length !== 1) reject("MALFORMED_REFERENCE");
-  const [, refRelation] = refEntries[0];
+  const [refId, refRelation] = refEntries[0];
+  observeReads(tx, [refId]);
   if (!refRelation.bound || refRelation.target.sort !== "N") reject("MALFORMED_REFERENCE");
-  const value = projectPlainJSON(tx.state.mo, refRelation.target);
+  const value = projectValue(tx, refRelation.target);
   if (typeof value !== "string") reject("MALFORMED_REFERENCE");
   return value;
 }
@@ -497,15 +542,15 @@ function normalizePublicPSlot(value) {
 }
 
 function copySlots(tx, O, S, frameId = null) {
-  const source = requireRelation(tx.state, O);
-  requireRelation(tx.state, S);
+  const source = readRelation(tx, O);
+  readRelation(tx, S);
   if (O.id === S.id) {
     record(tx, { op: "copy", frame: frameId, O: O.id, S: S.id, status: "NOOP_SAME_P" });
     return;
   }
   let value;
   try {
-    value = projectPlainJSON(tx.state.mo, source.target);
+    value = projectValue(tx, source.target);
   } catch (error) {
     if (error?.diagnostic) reject("COPY_NONPROJECTABLE");
     throw error;
@@ -540,10 +585,10 @@ function primitiveCopy(tx, frameId) {
 function primitiveAddEntity(tx, frameId) {
   const O = frameRoleSlot(tx.state, frameId, "O");
   const S = frameRoleSlot(tx.state, frameId, "S");
-  const source = requireRelation(tx.state, O);
+  const source = readRelation(tx, O);
   let value;
   try {
-    value = projectPlainJSON(tx.state.mo, source.target);
+    value = projectValue(tx, source.target);
   } catch (error) {
     if (error?.diagnostic) reject("ADD_ENTITY_NONPROJECTABLE");
     throw error;
@@ -568,11 +613,6 @@ function dispatchPrimitive(tx, frameId, name) {
   reject("UNKNOWN_CONTROLLER");
 }
 
-function slotPlainValue(tx, slot) {
-  const relation = requireRelation(tx.state, slot);
-  return projectPlainJSON(tx.state.mo, relation.target);
-}
-
 function executeVector(tx, frameId, endpoint) {
   const items = arrayMembers(tx.state, endpoint);
   for (const item of items) executeSlot(tx, frameId, item);
@@ -584,9 +624,9 @@ function prepareBranchTerm(tx, frameId, sourceSlot) {
     const resolved = resolveWithLoad(tx, frameId, address);
     return { kind: "ref", slot: resolved.slot, reads: resolved.readSlots };
   }
-  const relation = requireRelation(tx.state, sourceSlot);
+  const relation = readRelation(tx, sourceSlot);
   if (relation.target.sort === "N" && tx.state.mo.nodes.get(relation.target.id)?.kind === "string") {
-    const name = projectPlainJSON(tx.state.mo, relation.target);
+    const name = projectValue(tx, relation.target);
     return { kind: "primitive", name, reads: [] };
   }
   return { kind: "slot", slot: sourceSlot, reads: [] };
@@ -612,8 +652,8 @@ function consumeExecutionFuel(tx, frameId, slot) {
   tx.executionFuel -= 1;
 }
 
-function footprintFromTrace(trace, preparedReads, baselineRelations) {
-  const reads = new Set(preparedReads);
+function footprintFromTrace(trace, observedReads, preparedReads, baselineRelations) {
+  const reads = new Set([...observedReads, ...preparedReads]);
   const writes = new Set();
   let unproven = false;
 
@@ -632,6 +672,10 @@ function footprintFromTrace(trace, preparedReads, baselineRelations) {
       if (action?.op === "rebindRelation" || action?.op === "unbindRelation" || action?.op === "deleteRelation") {
         if (baselineRelations.has(action.id)) writes.add(action.id);
         else unproven = true;
+      } else if (action?.op !== "createNode" && action?.op !== "createRelation") {
+        // A1's remaining admitted MO actions only allocate fresh objects.
+        // A new effect must be explicitly classified before multi-H admission.
+        unproven = true;
       }
     }
 
@@ -671,7 +715,8 @@ function preflightHBranch(tx, source, plan, prepared) {
     throw error;
   }
 
-  return footprintFromTrace(probe.attemptedTrace, prepared.reads ?? [], baselineRelations);
+  return footprintFromTrace(probe.attemptedTrace, probe.readDependencies,
+    [...(prepared.reads ?? []), ...plan.pathSlots], baselineRelations);
 }
 
 function validateHBranchIndependence(tx, source, plans, prepared) {
@@ -696,12 +741,16 @@ function validateHBranchIndependence(tx, source, plans, prepared) {
 }
 
 function executeLambdaObject(tx, frameId, modelSlot) {
-  const { members } = objectMembers(tx.state, modelSlot);
+  const { members } = objectMembers(tx, modelSlot);
   const branches = [...members.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   if (branches.length === 0) return;
 
   const plans = planLValues(tx, frameId, branches.map(([key]) => key));
-  const prepared = branches.map(([, slot]) => prepareBranchTerm(tx, frameId, slot));
+  const prepared = branches.map(([, slot]) => {
+    const start = tx.readDependencies.length;
+    const term = prepareBranchTerm(tx, frameId, slot);
+    return { ...term, reads: [...new Set([...term.reads, ...tx.readDependencies.slice(start)])] };
+  });
   const destinations = new Set(plans.map(plan => plan.slot.id));
   for (const branch of prepared) {
     if (branch.reads.some(id => destinations.has(id))) reject("H_READ_WRITE_CONFLICT");
@@ -736,7 +785,7 @@ function executeLambdaObject(tx, frameId, modelSlot) {
 }
 
 function executeEntity(tx, callerFrame, modelSlot) {
-  const { members } = objectMembers(tx.state, modelSlot);
+  const { members } = objectMembers(tx, modelSlot);
   const controllerSlot = members.get(ROLE_KEY.R);
   if (!controllerSlot) return executeLambdaObject(tx, callerFrame, modelSlot);
 
@@ -773,7 +822,7 @@ function executeEntity(tx, callerFrame, modelSlot) {
 
 function executeSlot(tx, frameId, slot) {
   consumeExecutionFuel(tx, frameId, slot);
-  const relation = requireRelation(tx.state, slot);
+  const relation = readRelation(tx, slot);
   record(tx, { op: "exec-slot", frame: frameId, slot: slot.id });
   const endpoint = relation.target;
   if (endpoint.sort !== "N") reject("EXEC_ENDPOINT_NOT_JSON_NODE");
@@ -782,10 +831,10 @@ function executeSlot(tx, frameId, slot) {
 
   if (node.kind === "null") return;
   if (node.kind === "boolean" || node.kind === "number") {
-    return writeScalarToR(tx, frameId, projectPlainJSON(tx.state.mo, endpoint));
+    return writeScalarToR(tx, frameId, projectValue(tx, endpoint));
   }
   if (node.kind === "string") {
-    const name = projectPlainJSON(tx.state.mo, endpoint);
+    const name = projectValue(tx, endpoint);
     if (!ADMITTED_PRIMITIVES.has(name)) reject("UNKNOWN_CONTROLLER");
     return dispatchPrimitive(tx, frameId, name);
   }
@@ -798,7 +847,7 @@ function executeSlot(tx, frameId, slot) {
     return executeSlot(tx, frameId, prepared.slot);
   }
 
-  const { members } = objectMembers(tx.state, slot);
+  const { members } = objectMembers(tx, slot);
   if (members.has(ROLE_KEY.R)) return executeEntity(tx, frameId, slot);
   return executeLambdaObject(tx, frameId, slot);
 }

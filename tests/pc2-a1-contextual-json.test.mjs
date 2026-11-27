@@ -561,3 +561,78 @@ test("PC2-A1 ordered vector reuses its enclosing frame and preserves order/multi
   assert.equal(a.committedTrace.filter(event => event.op === "scalar").length, 2);
   assert.equal(b.committedTrace.filter(event => event.op === "scalar").length, 2);
 });
+
+test("PC2-A1 delta P2-01 — transitive projection reads conflict with descendant rebind in both branch orders", () => {
+  const cases = [
+    { value: { x: 7 }, path: "x" },
+    { value: { nested: [{ x: 7 }] }, path: "nested/0/x" },
+    { value: [{ x: [7] }], path: "0/x/0" }
+  ];
+  for (const { value, path } of cases) {
+    const writer = { $obj: 9, $rel: "=", $sub: { $ref: "$$rel/p/" + path } };
+    const copier = { $obj: { $ref: "$$rel/p" }, $rel: "=", $sub: { $ref: "$rel" } };
+    for (const [a, b] of [[writer, copier], [copier, writer]]) {
+      const session = createPC2A1Session({ $rel: [
+        { $obj: value, $rel: "=", $sub: { $ref: "$rel/p" } },
+        { "$rel/a": a, "$rel/b": b }
+      ] });
+      const before = snapshotPC2A1Session(session);
+      const run = executePC2A1(session);
+      assert.equal(run.diagnostic, "H_READ_WRITE_CONFLICT");
+      assert.equal(run.session, session);
+      assert.equal(snapshotPC2A1Session(run.session), before);
+      assert.deepEqual(run.committedTrace, []);
+      assert.equal(run.attemptedTrace.some(e => e.op === "H-route" && (e.key === "$rel/a" || e.key === "$rel/b")), false);
+    }
+  }
+});
+
+test("PC2-A1 delta P2-01 — disjoint structural projection remains admissible", () => {
+  const value = { nested: [{ x: 7 }] };
+  const run = executePC2A1(createPC2A1Session({ $rel: [
+    { $obj: value, $rel: "=", $sub: { $ref: "$rel/p" } },
+    { "$rel/q": 1 },
+    {
+      "$rel/a": { $obj: 9, $rel: "=", $sub: { $ref: "$$rel/q" } },
+      "$rel/b": { $obj: { $ref: "$$rel/p" }, $rel: "=", $sub: { $ref: "$rel" } }
+    }
+  ] }));
+  assert.equal(run.diagnostic, null);
+  assert.deepEqual(run.result, { a: null, b: value, p: value, q: 9 });
+});
+
+test("PC2-A1 delta P2-01 — reference descriptor and existing lvalue prefix are read dependencies", () => {
+  const fixtures = [
+    {
+      template: { $ref: "$$rel/value" },
+      $rel: [
+        { "$rel/value": 7 },
+        {
+          "$rel/a": { $obj: "$$rel/other", $rel: "=", $sub: { $ref: "$ent/template/$ref" } },
+          "$rel/b": { $ref: "$ent/template" }
+        }
+      ]
+    },
+    { $rel: [
+      { $obj: { x: 7 }, $rel: "=", $sub: { $ref: "$rel/p" } },
+      {
+        "$rel/a": { $obj: { x: 8 }, $rel: "=", $sub: { $ref: "$$rel/p" } },
+        "$rel/b": { $obj: 9, $rel: "=", $sub: { $ref: "$$rel/p/x" } }
+      }
+    ] }
+  ];
+  for (const fixture of fixtures) {
+    const branches = fixture.$rel.at(-1);
+    const reversed = { ...fixture, $rel: [...fixture.$rel.slice(0, -1),
+      { "$rel/a": branches["$rel/b"], "$rel/b": branches["$rel/a"] }] };
+    for (const source of [fixture, reversed]) {
+      const session = createPC2A1Session(source);
+      const before = snapshotPC2A1Session(session);
+      const run = executePC2A1(session);
+      assert.equal(run.diagnostic, "H_READ_WRITE_CONFLICT");
+      assert.equal(run.session, session);
+      assert.equal(snapshotPC2A1Session(run.session), before);
+      assert.deepEqual(run.committedTrace, []);
+    }
+  }
+});
