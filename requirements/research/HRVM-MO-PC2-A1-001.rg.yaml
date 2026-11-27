@@ -1,0 +1,13 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-PC2-A1-001
+normative: "### HRVM-MO-PC2-A1-001 — Исследовательский PC2-A1 executable witness MUST реализовать принятый PC2-A R2 C0-профиль поверх accepted R0/E1/J1: чистое relation-first ResolveExisting, отдельные staged deterministic namespace/cache effects, transactional lvalue materialization с coalescing по typed owner endpoint + label, фактические parent-context depths, H с immediate branch reference resolution в исходном C и исполнением в sibling H, ordered vector в одном enclosing frame, V с caller-time O/S/controller reference binding, COPY с distinct P/value semantics и same-P pre-projection NOOP, защищённый ROOT_SOURCE_SLOT с per-transition identity guard и полным rollback committed MO/cache/adapter/allocator/frame state при reject при отдельной attempted trace. A1 MUST фактически исполнить pinned historical absolute_addressing.json и relative_addressing.json с 3+16 stable observations и bounded negative witnesses; preliminary staged allocations/loads MAY precede поздний protected reject, irreversible host effects MUST NOT occur. A1 MUST NOT реализовывать A2 reflection/VIEW/C-PATH, менять R0/E1/J1 semantics, redesign Studio, выбирать carrier/final grammar или заявлять PC2/PC4 completion."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-PC1-J1-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-PC1-E1-001 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "research/pc2/a1-contextual-json.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/pc2-a1-contextual-json.test.mjs" }
