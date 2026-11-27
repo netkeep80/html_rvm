@@ -704,10 +704,44 @@ export function snapshotPC2A1Session(session) {
   });
 }
 
+function rootExecutionDisposition(context) {
+  const rootSlot = P(PC2_A1_ROOT_SOURCE_SLOT);
+  const relation = requireRelation(context.state, rootSlot);
+  if (relation.target.sort !== "N") reject("SOURCE_ROOT_NOT_JSON_NODE");
+  const node = context.state.mo.nodes.get(relation.target.id);
+  if (!node) reject("SOURCE_ROOT_MISSING");
+  if (node.kind !== "object") return "DATA";
+
+  const roleKeys = new Set();
+  for (const [, member] of structuralRelations(context.state, relation.target)) {
+    if (member.label.kind !== "key") continue;
+    if (member.label.value === ROLE_KEY.O || member.label.value === ROLE_KEY.R || member.label.value === ROLE_KEY.S) {
+      if (roleKeys.has(member.label.value)) reject("DUPLICATE_SOURCE_KEY");
+      roleKeys.add(member.label.value);
+    }
+  }
+  if (roleKeys.has(ROLE_KEY.R)) return "EXEC";
+  if (roleKeys.has(ROLE_KEY.O) || roleKeys.has(ROLE_KEY.S)) return "NO_CONTROLLER";
+  return "DATA";
+}
+
 export function executePC2A1(session) {
   const tx = beginTransaction(session);
   try {
-    assertCanonicalSourceRoot(tx);
+    const sourceRoot = assertCanonicalSourceRoot(tx);
+    const disposition = rootExecutionDisposition(tx);
+    if (disposition === "DATA") {
+      return {
+        session,
+        result: projectPlainJSON(tx.state.mo, sourceRoot),
+        resultSlot: null,
+        hostFrame: null,
+        diagnostic: null,
+        attemptedTrace: [],
+        committedTrace: []
+      };
+    }
+    if (disposition === "NO_CONTROLLER") reject("NO_CONTROLLER");
     const initial = appendJSON(tx, null, "run-result-null");
     const runtime = createRuntimeSlot(tx, initial, "run-result-slot");
     const hostFrame = createFrameTx(tx, {

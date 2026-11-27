@@ -66,6 +66,26 @@ function makePlanSession({ sharedNull = false, sharedObject = false } = {}) {
   return session;
 }
 
+test("PC2-A1 W0 — ordinary root JSON remains DATA and role-only root preserves J1 NO_CONTROLLER boundary", () => {
+  for (const data of [{ a: 1, nested: { b: true } }, [1, 2, 3], { $ref: "$ent" }]) {
+    const session = createPC2A1Session(data);
+    const before = snapshotPC2A1Session(session);
+    const run = executePC2A1(session);
+    assert.equal(run.diagnostic, null);
+    assert.deepEqual(run.result, data);
+    assert.equal(snapshotPC2A1Session(run.session), before);
+    assert.deepEqual(run.attemptedTrace, []);
+    assert.deepEqual(run.committedTrace, []);
+  }
+
+  const roleOnly = createPC2A1Session({ $obj: 1 });
+  const beforeRoleOnly = snapshotPC2A1Session(roleOnly);
+  const rejected = executePC2A1(roleOnly);
+  assert.equal(rejected.diagnostic, "NO_CONTROLLER");
+  assert.equal(snapshotPC2A1Session(rejected.session), beforeRoleOnly);
+  assert.deepEqual(rejected.committedTrace, []);
+});
+
 test("PC2-A1 W1 — cold/warm namespace lookup shares one cached P identity", () => {
   const source = {
     $rel: [
@@ -84,6 +104,13 @@ test("PC2-A1 W1 — cold/warm namespace lookup shares one cached P identity", ()
   assert.ok(run.session.namespace.has("ent1"));
   const slot = run.session.namespace.get("ent1");
   assert.ok(run.session.state.mo.relations.has(slot));
+  const resolves = run.committedTrace.filter(event =>
+    event.op === "resolve" && event.status === "OK" && event.address === "ent1/id");
+  assert.equal(resolves.length, 2);
+  assert.equal(resolves[0].readSlots[0], slot);
+  assert.equal(resolves[1].readSlots[0], slot);
+  assert.equal(new Set(resolves.map(event => event.readSlots[0])).size, 1);
+  assert.ok(hits.every(event => event.slot === slot));
 });
 
 test("PC2-A1 W1 — failed cold load and late protected-root failure roll back all committed state", () => {
@@ -327,6 +354,16 @@ test("PC2-A1 historical relative addressing — all 16 native CHECK observations
     assert.equal(run.result[`${prefix}sub`].id, `${prefix}ent/$sub`);
     assert.equal(run.result[`${prefix}obj`].id, `${prefix}ent/$obj`);
     assert.equal(run.result[`${prefix}rel`].id, `${prefix}rel/id`);
+  }
+  const resolvedAddresses = new Set(
+    run.committedTrace
+      .filter(event => event.op === "resolve" && event.status === "OK")
+      .map(event => event.address)
+  );
+  for (const prefix of prefixes) {
+    assert.ok(resolvedAddresses.has(`${prefix}ent/id`));
+    assert.ok(resolvedAddresses.has(`${prefix}sub`));
+    assert.ok(resolvedAddresses.has(`${prefix}obj`));
   }
   const v = run.committedTrace.filter(event => event.op === "V-enter");
   assert.ok(v.length >= 17);
