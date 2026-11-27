@@ -567,6 +567,8 @@ test("PC2-A2 H probes and real execution consume one shared monotonic work budge
   assert.equal(snapshotPC2A1Session(run.session), before);
   assert.deepEqual(run.committedTrace, []);
   assert.ok(run.attemptedTrace.some(event => event.op === "execution-fuel"));
-  // Root dispatch + 256 probes consume 257 units; only 255 real H routes fit.
-  assert.equal(run.attemptedTrace.filter(event => event.op === "H-route").length, 255);
+  // Root dispatch + 256 probes consume 257 units. The final real branch records
+  // its attempted route before executeSlot rejects on fuel; only 255 scalar bodies commit tentatively.
+  assert.equal(run.attemptedTrace.filter(event => event.op === "H-route").length, 256);
+  assert.equal(run.attemptedTrace.filter(event => event.op === "scalar").length, 255);
 });
