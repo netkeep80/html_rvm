@@ -46,6 +46,21 @@ function reject(diagnostic, message) {
   throw new J1Reject(diagnostic, message);
 }
 
+// Observer metadata exists only inside an execution attempt; never in semantic state.
+const OBSERVER = Symbol("j1-observer");
+function record(program, kind, trace) {
+  if (program?.[OBSERVER]) program[OBSERVER].records.push({ kind, trace });
+}
+function publicProgram(program) {
+  const { [OBSERVER]: observer, ...result } = program;
+  return observer ? result : program;
+}
+function observedStep(program, event) {
+  const observer = program[OBSERVER];
+  const trace = observer.records.slice(observer.cursor);
+  observer.cursor = observer.records.length;
+  return { program: publicProgram(program), event, trace };
+}
 function programWithState(program, state) {
   return { ...program, state };
 }
@@ -68,11 +83,12 @@ function freshFrameId(state) {
   return freshId(state.usedFrames, "j1:F:");
 }
 
-function applyMO(state, actions) {
+function applyMO(state, actions, program) {
   const result = executeMOAtomically(state.mo, actions);
   if (result.outcome.status !== "OK") reject(result.outcome.diagnostic ?? "J1_MO_REJECT");
   const next = { ...state, mo: result.state };
   validateE1State(next);
+  record(program, "R0.atomic", result.trace);
   return next;
 }
 
@@ -146,7 +162,7 @@ function planJSONSubtree(state, input) {
 
 function appendJSON(program, value) {
   const plan = planJSONSubtree(program.state, value);
-  const state = applyMO(program.state, plan.actions);
+  const state = applyMO(program.state, plan.actions, program);
   return { program: programWithState(program, state), endpoint: plan.root };
 }
 
@@ -156,7 +172,7 @@ function appendArrayByReference(program, endpoints) {
   }
   let state = program.state;
   const nodeId = freshNodeId(state);
-  state = applyMO(state, [{ op: "createNode", id: nodeId, kind: "array" }]);
+  state = applyMO(state, [{ op: "createNode", id: nodeId, kind: "array" }], program);
   for (let i = 0; i < endpoints.length; i += 1) {
     const relationId = freshRelationId(state);
     state = applyMO(state, [{
@@ -165,7 +181,7 @@ function appendArrayByReference(program, endpoints) {
       owner: N(nodeId),
       label: Index(i),
       target: endpoints[i]
-    }]);
+    }], program);
   }
   return { program: programWithState(program, state), endpoint: N(nodeId) };
 }
@@ -179,7 +195,7 @@ function createMemberSlot(program, owner, key, initial) {
     owner,
     label: Key(key),
     target: initial
-  }]);
+  }], program);
   return { program: programWithState(program, state), slot: P(id) };
 }
 
@@ -188,6 +204,7 @@ function createRuntimeSlot(program, initial) {
   const begin = program.state.mo.roots[0];
   const created = createDuplet(program.state, { id, begin, end: initial });
   if (created.outcome.status !== "OK") reject(created.outcome.diagnostic ?? "RUNTIME_SLOT_CREATE");
+  record(program, "E1.createDuplet", created.trace);
   return { program: programWithState(program, created.state), slot: P(id) };
 }
 
@@ -319,6 +336,7 @@ function instantiateResolvedEntity(program, resolved, caller) {
     S: S.id
   });
   if (created.outcome.status !== "OK") reject(created.outcome.diagnostic ?? "FRAME_CREATE_FAILED");
+  record(program, "E1.createFrame", created.trace);
   const next = programWithState(program, created.state);
   return {
     program: next,
@@ -343,6 +361,7 @@ function writeFrameRole(program, frame, role, target) {
     steps: [{ op: "rebindRole", role, target }]
   });
   if (result.outcome.status !== "OK") reject(result.outcome.diagnostic ?? "ROLE_WRITE_FAILED");
+  record(program, "E1.Q", result.trace);
   return { program: programWithState(program, result.state), trace: result.trace };
 }
 
@@ -384,7 +403,7 @@ function* invokePrimitive(program, inst, environment, events, options = {}) {
     const appended = appendJSON(program, environment.version);
     const written = writeFrameRole(appended.program, inst.frame, "R", appended.endpoint);
     events.push(resultEvent(written.program, inst, controller, "R", appended.endpoint, options));
-    yield { program: written.program, event: events.at(-1) };
+    yield observedStep(written.program, events.at(-1));
     return { program: written.program, endpoint: appended.endpoint };
   }
 
@@ -392,7 +411,7 @@ function* invokePrimitive(program, inst, environment, events, options = {}) {
     const appended = appendJSON(program, environment.meta);
     const written = writeFrameRole(appended.program, inst.frame, "R", appended.endpoint);
     events.push(resultEvent(written.program, inst, controller, "R", appended.endpoint, options));
-    yield { program: written.program, event: events.at(-1) };
+    yield observedStep(written.program, events.at(-1));
     return { program: written.program, endpoint: appended.endpoint };
   }
 
@@ -403,7 +422,7 @@ function* invokePrimitive(program, inst, environment, events, options = {}) {
     const appended = appendJSON(program, boolean);
     const written = writeFrameRole(appended.program, inst.frame, "S", appended.endpoint);
     events.push(resultEvent(written.program, inst, controller, "S", appended.endpoint, options));
-    yield { program: written.program, event: events.at(-1) };
+    yield observedStep(written.program, events.at(-1));
     return { program: written.program, endpoint: appended.endpoint };
   }
 
@@ -451,7 +470,7 @@ function* invokePrimitive(program, inst, environment, events, options = {}) {
     const output = appendArrayByReference(current, selected);
     const written = writeFrameRole(output.program, inst.frame, "R", output.endpoint);
     events.push(resultEvent(written.program, inst, controller, "R", output.endpoint, options));
-    yield { program: written.program, event: events.at(-1) };
+    yield observedStep(written.program, events.at(-1));
     return { program: written.program, endpoint: output.endpoint };
   }
 
@@ -503,6 +522,7 @@ function* invokeLambdaObject(program, resolved, caller, environment, events) {
       S: destination.slot.id
     });
     if (created.outcome.status !== "OK") reject(created.outcome.diagnostic ?? "FRAME_CREATE_FAILED");
+    record(current, "E1.createFrame", created.trace);
     current = programWithState(current, created.state);
     const inst = {
       program: current,
@@ -614,10 +634,12 @@ export function* stepNaturalJSON(program, environment) {
   validateE1State(program.state);
   const start = program;
   const events = [];
+  const observer = { records: [], cursor: 0 };
   try {
-    const executed = yield* executeBody(program, environment, events);
+    const executed = yield* executeBody({ ...program, [OBSERVER]: observer }, environment, events);
     return {
-      program: executed.program,
+      program: executed.mode === "DATA" ? start : publicProgram(executed.program),
+      trace: executed.mode === "DATA" ? [] : observer.records,
       result: projectPlainJSON(executed.program.state.mo, executed.endpoint),
       resultEndpoint: executed.endpoint,
       events,
@@ -632,6 +654,7 @@ export function* stepNaturalJSON(program, environment) {
       result: null,
       resultEndpoint: null,
       events: [],
+      trace: [],
       mode: "REJECT",
       diagnostic
     };

@@ -75,3 +75,16 @@ test("where result payload has original input identity and run history survives 
  assert.deepEqual(item.target,src);s.reflect(["$sub"],"R","is_null");
  assert.deepEqual(s.runs[0].result,["4"]);assert.deepEqual(s.run(env).result,[null]);
 });
+
+test("actual R0/E1 traces partition by steps, and REJECT commits none",()=>{
+ const p=subjectivateNaturalJSON(JSON.parse(examples.where));
+ const g=stepNaturalJSON(p,env), trace=[];let n=g.next();
+ assert.ok(n.value.trace.some(t=>t.kind==="E1.createFrame"));
+ assert.ok(n.value.trace.some(t=>t.kind==="E1.Q"));
+ while(!n.done){trace.push(...n.value.trace);n=g.next()}
+ assert.deepEqual(n.value.trace,trace);
+ assert.deepEqual(executeNaturalJSON(p,env).trace,trace);
+ assert.equal(Object.getOwnPropertySymbols(n.value.program).length,0);
+ assert.deepEqual(executeNaturalJSON(subjectivateNaturalJSON({"$rel/a":"rmvm/version","$rel/z":"unknown"}),env).trace,[]);
+ assert.deepEqual(executeNaturalJSON(subjectivateNaturalJSON({a:1}),env).trace,[]);
+});

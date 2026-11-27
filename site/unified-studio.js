@@ -2,14 +2,14 @@ import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,range
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
-let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null;
+let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null,zoom=1;
 const source=$("source"),svg=$("network"),ns="http://www.w3.org/2000/svg",json=x=>JSON.stringify(x,null,2);
 const key=e=>e.sort+":"+e.id, endpoint=k=>({sort:k[0],id:k.slice(2)});
 function el(tag,attrs={},text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;return e}
 function coord(ev){const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
 function choose(k,highlight=true){selected=k;render();if(highlight)highlightSource()}
 function highlightSource(){
- if(!selected||session.dirty||session.appliedText===null)return;
+ if(!selected||view||session.dirty||session.appliedText===null)return;
  const ranges=rangesForIdentity(session.applied,session.appliedText,endpoint(selected));
  if(ranges.length){const x=ranges[0];source.setSelectionRange(x.start,x.end)}
 }
@@ -17,7 +17,8 @@ function network(program,roles={}){
  const mo=program.state.mo, records=[...Array.from(mo.nodes,([id,r])=>({sort:"N",id,r})),...Array.from(mo.relations,([id,r])=>({sort:"P",id,r}))];
  svg.replaceChildren();const cols=4,pos=new Map();
  records.forEach((e,i)=>pos.set(key(e),session.layout.get(key(e))??{x:95+i%cols*180,y:45+Math.floor(i/cols)*76}));
- svg.setAttribute("width",Math.max(760,...[...pos.values()].map(x=>x.x+70)));svg.setAttribute("height",Math.max(420,...[...pos.values()].map(x=>x.y+55)));
+ const w=Math.max(760,...[...pos.values()].map(x=>x.x+70)),h=Math.max(420,...[...pos.values()].map(x=>x.y+55));
+ svg.setAttribute("viewBox","0 0 "+w+" "+h);svg.setAttribute("width",w*zoom);svg.setAttribute("height",h*zoom);
  for(const e of records.filter(e=>e.sort==="P")){
   const p=pos.get(key(e));
   for(const [side,end] of [[-1,e.r.owner],[1,e.r.target]]){if(!end)continue;const q=pos.get(key(end));if(!q)continue;
@@ -44,7 +45,7 @@ function render(){
  const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
  source.disabled=session.running;source.placeholder=session.projectionDiagnostic??"";
- $("projection-note").textContent=session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":"Выбор ключа → отношение; выбор значения → payload";
+ $("projection-note").textContent=view?"Историческое состояние; исходный редактор показывает текущую применённую модель":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":"Выбор ключа → отношение; выбор значения → payload";
  for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
  $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
  $("inspect").disabled=session.running||session.dirty||!session.executable;
@@ -58,11 +59,11 @@ function render(){
  $("result").textContent=viewEvent?json(viewEvent.result):resultRun?json(resultRun.result):session.running?"Предварительное осуществление":"—";
  $("exact").textContent=session.lossless();
  $("occurrences").replaceChildren();$("result-occurrences").replaceChildren();
- if(ep&&!session.dirty&&session.appliedText!==null){for(const x of rangesForIdentity(session.applied,session.appliedText,ep)){const b=document.createElement("button");b.textContent=json(x.path);b.onclick=()=>source.setSelectionRange(x.start,x.end);$("occurrences").append(b)}}
+ if(ep&&!view&&!session.dirty&&session.appliedText!==null){for(const x of rangesForIdentity(session.applied,session.appliedText,ep)){const b=document.createElement("button");b.textContent=json(x.path);b.onclick=()=>source.setSelectionRange(x.start,x.end);$("occurrences").append(b)}}
  if(ep&&resultRun&&!viewEvent){const v=projectionOccurrences(resultRun.program.state.mo,resultRun.resultEndpoint,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=locateVPath(resultRun.program.state.mo,resultRun.resultEndpoint,path);if(q.ok)choose(key(q.node))};$("result-occurrences").append(b)}}
  $("timeline").replaceChildren();
- for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;viewEvent=e;viewRun=null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json(e);render()};$("timeline").append(b)}
- for(const [i,run] of session.runs.entries()){const b=document.createElement("button");b.textContent="Run "+(i+1)+": "+json(run.result);b.onclick=()=>{view=run.program;viewRun=run;viewEvent=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json(run.events);render()};$("timeline").append(b)}
+ for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;viewEvent=e;viewRun=null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json({observation:e,trace:snapshots.find(x=>x.event===e)?.trace??[]});render()};$("timeline").append(b)}
+ for(const [i,run] of session.runs.entries()){const b=document.createElement("button");b.textContent="Run "+(i+1)+": "+json(run.result);b.onclick=()=>{view=run.program;viewRun=run;viewEvent=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()};$("timeline").append(b)}
  for(const e of session.edits){const b=document.createElement("button");b.textContent=e.kind==="Q"?"Q: reflection":e.action.op;b.onclick=()=>{$("transition-detail").textContent=json(e)};$("timeline").append(b)}
 }
 function act(fn){try{fn();render()}catch(e){render();$("status").textContent=e.message}}
@@ -82,7 +83,9 @@ source.addEventListener("click",selectSource);source.addEventListener("keyup",se
 $("apply").onclick=()=>act(()=>{if(session.apply()){selected=null;clearView()}});
 $("discard").onclick=()=>act(()=>{session.discard();syncText()});
 $("reset").onclick=()=>act(()=>{session.reset();clearView()});
-$("layout-reset").onclick=()=>act(()=>session.layout.clear());
+$("layout-reset").onclick=()=>act(()=>{session.layout.clear();zoom=1});
+$("zoom-in").onclick=()=>act(()=>{zoom=Math.min(2,zoom*1.2)});
+$("zoom-out").onclick=()=>act(()=>{zoom=Math.max(.5,zoom/1.2)});
 $("inspect").onclick=()=>act(()=>{clearView();session.inspect()});
 const env=()=>({version,meta:{engine:"html_rvm",slice:"J1"}});
 $("step").onclick=()=>act(()=>{clearView();session.step(env())});
