@@ -505,7 +505,7 @@ export function copyPC2A1Slots(session, O, S) {
       session: committedSession(tx),
       diagnostic: null,
       attemptedTrace: tx.attemptedTrace,
-      committedTrace: tx.attemptedTrace.map(cloneJSON)
+      committedTrace: tx.attemptedTrace.map(entry => cloneJSON(entry))
     };
   } catch (error) {
     if (!error?.diagnostic) throw error;
@@ -729,7 +729,7 @@ export function executePC2A1(session) {
       hostFrame,
       diagnostic: null,
       attemptedTrace: tx.attemptedTrace,
-      committedTrace: tx.attemptedTrace.map(cloneJSON)
+      committedTrace: tx.attemptedTrace.map(entry => cloneJSON(entry))
     };
   } catch (error) {
     if (!error?.diagnostic) throw error;
