@@ -818,6 +818,8 @@ export const E2_LEDGER_C = Object.freeze([
 export const E2_LEDGER_QUALIFICATION_C = Object.freeze({
   derivedMeans: "derivable from validated pair topology relative to declared atom/bootstrap roots and shape conventions, not standalone untyped self-description",
   contextualAddressing: "E2 admits E1 object-key JSON-pointer token decoding (~0, ~1, including empty keys); array-index typing remains outside the W1-W8 correspondence subset",
+  duplicateObjectKeys: "duplicate object-key ambiguity is outside admitted E2 correspondence domain; no unrestricted E1 object-member equivalence is claimed for the JS/JSON-near A control",
+  frameInterpretation: "raw pair topology may cease to satisfy the bounded frame shape after legal topology edits; every operation that interprets a pair as a frame must revalidate shape before mutation",
   deletion: "non-atom duplet deletion is admitted only when no other live pair references the occurrence; allocation is append-only and deleted indices are never reused"
 });
 
