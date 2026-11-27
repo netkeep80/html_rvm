@@ -450,8 +450,8 @@ test("PC2-A1 audit P2-04 — recursive references reject deterministically while
 
   const registry = {};
   const depth = 24;
-  for (let i = 1; i < depth; i += 1) registry[\`a\${i}\`] = { $ref: \`a\${i + 1}\` };
-  registry[\`a\${depth}\`] = 7;
+  for (let i = 1; i < depth; i += 1) registry["a" + i] = { $ref: "a" + (i + 1) };
+  registry["a" + depth] = 7;
   const finite = executePC2A1(createPC2A1Session(
     { $rel: { $ref: "a1" } },
     { registry }
