@@ -129,7 +129,7 @@ export class JsonNearCarrier {
     const m = /^(\$\$?)(rel|obj|sub|ent)\/(.*)$/.exec(path);
     if (!m) fail("EXPLICIT_CONTEXT_ROOT_REQUIRED");
     let f = frame;
-    if (m[1] === "$") {
+    if (m[1] === "$$") {
       if (!f.parent) fail("MISSING_PARENT");
       f = f.parent;
     }
