@@ -335,8 +335,10 @@ function stageLoadNamespace(tx, name) {
 
 function resolveWithLoad(tx, frameId, address) {
   const parsed = parseAddress(address);
-  if (parsed.kind === "global" && !tx.namespace.has(parsed.name)) stageLoadNamespace(tx, parsed.name);
-  return resolveParsedExisting(tx, frameId, parsed);
+  if (parsed.kind === "global") stageLoadNamespace(tx, parsed.name);
+  const resolved = resolveParsedExisting(tx, frameId, parsed);
+  record(tx, { op: "resolve", frame: frameId, address, slot: resolved.slot.id, readSlots: resolved.readSlots });
+  return resolved;
 }
 
 function createNullMember(tx, owner, label) {
@@ -402,7 +404,9 @@ function planOneLValue(tx, frameId, address) {
     }
     pathSlots.push(slot.id);
   }
-  return { address, slot, pathSlots, parsed };
+  const result = { address, slot, pathSlots, parsed };
+  record(tx, { op: "plan-lvalue", frame: frameId, address, slot: slot.id, pathSlots });
+  return result;
 }
 
 function planLValues(tx, frameId, addresses, { conflictCheck = true } = {}) {

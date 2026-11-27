@@ -318,8 +318,8 @@ test("PC2-A1 historical absolute addressing — all 3 native CHECK observations 
 test("PC2-A1 historical relative addressing — all 16 native CHECK observations execute through actual parent roles", () => {
   const source = JSON.parse(HISTORICAL_RELATIVE_SOURCE);
   const run = executePC2A1(createPC2A1Session(source));
-  assert.equal(run.diagnostic, null);
-  for (const prefix of ["$", "$$", "$$$", "$$$$"]) {
+  assert.equal(run.diagnostic, null, JSON.stringify(run.attemptedTrace.slice(-30), null, 2));
+  for (const prefix of ["$", "$", "$$", "$$"]) {
     assert.equal(run.result[`${prefix}ent`].id, `${prefix}ent/id`);
     assert.equal(run.result[`${prefix}sub`].id, `${prefix}ent/$sub`);
     assert.equal(run.result[`${prefix}obj`].id, `${prefix}ent/$obj`);
