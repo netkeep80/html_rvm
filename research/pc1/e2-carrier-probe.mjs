@@ -199,6 +199,7 @@ export class JsonNearCarrier {
         if (!step || step.op !== "rebindRole") fail("INVALID_Q_STEP");
         const role = requireRole(step.role);
         if (!step.target || !["atom", "duplet"].includes(step.target.kind)) fail("INVALID_ENDPOINT");
+        requireId(step.target.id);
         prepared.push({ index, role, slot: frame.roles[role], target: step.target });
       }
     } catch (e) {
@@ -490,9 +491,62 @@ export class DupletArrayCarrier {
 
   // Frame structure is entirely pair topology:
   // eo=[Eslot,Oslot], rs=[Rslot,Sslot], roles=[eo,rs], frame=[parent,roles].
+  // A raw pair can exist without being an admitted frame. Every operation that
+  // interprets a pair as a frame re-validates this bounded shape before writing.
+  frameShape(frame, seen = new Set()) {
+    this.requireDuplet(frame, "INVALID_FRAME");
+    if (seen.has(frame)) fail("FRAME_PARENT_CYCLE");
+    seen.add(frame);
+
+    const [parent, roles] = this.pairs[frame];
+    this.requireDuplet(roles, "INVALID_FRAME_SHAPE");
+    const [eo, rs] = this.pairs[roles];
+    this.requireDuplet(eo, "INVALID_FRAME_SHAPE");
+    this.requireDuplet(rs, "INVALID_FRAME_SHAPE");
+
+    const [E, O] = this.pairs[eo];
+    const [R, S] = this.pairs[rs];
+
+    let parentShape = null;
+    if (parent === this.internal.null) {
+      this.requireExisting(parent, "MISSING_PARENT");
+    } else {
+      parentShape = this.frameShape(parent, seen);
+    }
+
+    const structural = new Set([frame, roles, eo, rs]);
+    if (parentShape) for (const id of parentShape.structural) structural.add(id);
+
+    for (const slot of [E, O, R, S]) {
+      this.requireDuplet(slot, "INVALID_FRAME_SLOT");
+      if (structural.has(slot)) fail("INVALID_FRAME_SLOT");
+    }
+
+    return {
+      frame,
+      parent,
+      roles,
+      eo,
+      rs,
+      E,
+      O,
+      R,
+      S,
+      depth: parentShape ? parentShape.depth + 1 : 0,
+      structural
+    };
+  }
+
   createFrame({ parent = this.internal.null, E, O, R, S }) {
-    this.requireExisting(parent, "MISSING_PARENT");
-    for (const x of [E, O, R, S]) this.requireDuplet(x, "INVALID_FRAME_SLOT");
+    let parentShape = null;
+    if (parent === this.internal.null) this.requireExisting(parent, "MISSING_PARENT");
+    else parentShape = this.frameShape(parent);
+
+    for (const slot of [E, O, R, S]) {
+      this.requireDuplet(slot, "INVALID_FRAME_SLOT");
+      if (parentShape?.structural.has(slot)) fail("INVALID_FRAME_SLOT");
+    }
+
     const eo = this.duplet(E, O);
     const rs = this.duplet(R, S);
     const roles = this.duplet(eo, rs);
@@ -500,19 +554,17 @@ export class DupletArrayCarrier {
   }
 
   parent(frame) {
-    return this.read(frame).begin;
+    return this.frameShape(frame).parent;
   }
 
   frameRoles(frame) {
-    const roles = this.read(frame).end;
-    const { begin: eo, end: rs } = this.read(roles);
-    const eop = this.read(eo);
-    const rsp = this.read(rs);
-    return { E: eop.begin, O: eop.end, R: rsp.begin, S: rsp.end };
+    const shape = this.frameShape(frame);
+    return { E: shape.E, O: shape.O, R: shape.R, S: shape.S };
   }
 
   roleSlot(frame, role) {
-    return this.frameRoles(frame)[requireRole(role)];
+    const shape = this.frameShape(frame);
+    return shape[requireRole(role)];
   }
 
   roleValue(frame, role) {
@@ -520,16 +572,7 @@ export class DupletArrayCarrier {
   }
 
   depth(frame) {
-    let n = 0;
-    let p = this.parent(frame);
-    const seen = new Set([frame]);
-    while (p !== this.internal.null) {
-      if (seen.has(p)) fail("FRAME_PARENT_CYCLE");
-      seen.add(p);
-      n += 1;
-      p = this.parent(p);
-    }
-    return n;
+    return this.frameShape(frame).depth;
   }
 
   resolve(frame, path) {
@@ -590,12 +633,15 @@ export class DupletArrayCarrier {
     if (!Array.isArray(steps)) return { status: "REJECT", diagnostic: "INVALID_Q_STEPS", trace: evidenceTrace([]) };
     const prepared = [];
     try {
+      const shape = this.frameShape(frame);
       for (let index = 0; index < steps.length; index += 1) {
         const step = steps[index];
         if (!step || step.op !== "rebindRole") fail("INVALID_Q_STEP");
         const role = requireRole(step.role);
         this.requireHandle(step.target, "INVALID_ENDPOINT");
-        prepared.push({ index, role, slot: this.roleSlot(frame, role), target: step.target });
+        const slot = shape[role];
+        this.requireDuplet(slot, "INVALID_FRAME_SLOT");
+        prepared.push({ index, role, slot, target: step.target });
       }
     } catch (e) {
       if (e?.diagnostic) return { status: "REJECT", diagnostic: e.diagnostic, trace: evidenceTrace([]) };
@@ -630,11 +676,15 @@ export class DupletArrayCarrier {
   }
 
   classifyWrites(writes) {
+    if (!Array.isArray(writes)) fail("INVALID_BRANCH_WRITES");
     const normalized = writes.map(w => {
-      this.requireExisting(w.frame, "MISSING_FRAME");
+      if (!w || typeof w !== "object") fail("INVALID_BRANCH_WRITE");
+      const shape = this.frameShape(w.frame);
       const role = requireRole(w.role ?? "R");
       this.requireExisting(w.target, "MISSING_TARGET");
-      return { frame: w.frame, role, slot: this.roleSlot(w.frame, role), target: w.target };
+      const slot = shape[role];
+      this.requireDuplet(slot, "INVALID_FRAME_SLOT");
+      return { frame: w.frame, role, slot, target: w.target };
     });
     const bySlot = new Map();
     for (const w of normalized) {
@@ -646,9 +696,16 @@ export class DupletArrayCarrier {
   }
 
   commitWrites(writes) {
-    const classification = this.classifyWrites(writes);
+    let classification;
+    try {
+      classification = this.classifyWrites(writes);
+    } catch (e) {
+      if (e?.diagnostic) return { status: "REJECT", diagnostic: e.diagnostic, writes: [] };
+      throw e;
+    }
     if (classification.status === "ALIAS_CONFLICT") return { status: "REJECT", diagnostic: "ALIAS_CONFLICT", writes: classification.writes };
     for (const w of classification.writes) this.pairs[w.slot][1] = w.target;
+    this.validateState();
     return { status: "OK", diagnostic: null, writes: classification.writes };
   }
 
