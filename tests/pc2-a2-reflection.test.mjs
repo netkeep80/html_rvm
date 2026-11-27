@@ -316,3 +316,257 @@ test("PC2-A2 failure diagnostics preserve exact rollback for invalid entry and r
   assert.deepEqual(recursive.committedTrace, []);
   assert.ok(recursive.attemptedTrace.some(event => event.op === "execution-fuel"));
 });
+
+
+test("PC2-A2 bounded where/foreach laws — null, empty, strict boolean, duplicates and untouched null results", () => {
+  const whereNull = executePC2A2(createPC2A1Session({
+    $obj: null,
+    $rel: "where",
+    $sub: true
+  }), { entry: "EXEC" });
+  assert.equal(whereNull.diagnostic, null);
+  assert.deepEqual(whereNull.result, []);
+  assert.equal(whereNull.committedTrace.filter(event => event.op === "iterator-item").length, 0);
+
+  const duplicates = executePC2A2(createPC2A1Session({
+    $obj: ["a", "a", "b"],
+    $rel: "where",
+    $sub: true
+  }), { entry: "EXEC" });
+  assert.equal(duplicates.diagnostic, null);
+  assert.deepEqual(duplicates.result, ["a", "a", "b"]);
+
+  const nonBoolean = executePC2A2(createPC2A1Session({
+    $obj: [1, 2],
+    $rel: "where",
+    $sub: 1
+  }), { entry: "EXEC" });
+  assert.equal(nonBoolean.diagnostic, null);
+  assert.deepEqual(nonBoolean.result, []);
+
+  const emptyForeach = executePC2A2(createPC2A1Session({
+    $obj: [],
+    $rel: "foreachobj",
+    $sub: null
+  }), { entry: "EXEC" });
+  assert.equal(emptyForeach.diagnostic, null);
+  assert.deepEqual(emptyForeach.result, []);
+  assert.equal(emptyForeach.committedTrace.filter(event =>
+    event.op === "iterator-item" && event.kind === "foreachobj").length, 0);
+
+  const untouched = executePC2A2(createPC2A1Session({
+    $obj: [null, 1],
+    $rel: "foreachobj",
+    $sub: null
+  }), { entry: "EXEC" });
+  assert.equal(untouched.diagnostic, null);
+  assert.deepEqual(untouched.result, [null, null]);
+});
+
+test("PC2-A2 where selection is a value COPY: later source mutation does not alter selected compound output", () => {
+  const source = {
+    filter: {
+      $obj: [{ x: "a" }, { x: 2 }],
+      $rel: "where",
+      $sub: { $obj: { $ref: "$obj/x" }, $rel: "is_string" }
+    },
+    mutateInput: {
+      $obj: "changed",
+      $rel: "=",
+      $sub: { $ref: "$ent/filter/$obj/0/x" }
+    },
+    $rel: [
+      { $ref: "$ent/filter" },
+      { $ref: "$ent/mutateInput" }
+    ]
+  };
+  const run = executePC2A2(createPC2A1Session(source), { entry: "EXEC" });
+  assert.equal(run.diagnostic, null);
+  assert.deepEqual(run.result, [{ x: "a" }]);
+  assert.ok(run.committedTrace.some(event =>
+    event.op === "plan-lvalue" && event.address === "$ent/filter/$obj/0/x"));
+});
+
+test("PC2-A2 iterator admission rejects null/nonarray input, nonempty foreach output and O=R overlap", () => {
+  const nullInput = executePC2A2(createPC2A1Session({
+    $obj: null,
+    $rel: "foreachobj",
+    $sub: null
+  }), { entry: "EXEC" });
+  assert.equal(nullInput.diagnostic, "ITERATOR_INPUT_REQUIRED");
+
+  const scalarInput = executePC2A2(createPC2A1Session({
+    $obj: 1,
+    $rel: "foreachobj",
+    $sub: null
+  }), { entry: "EXEC" });
+  assert.equal(scalarInput.diagnostic, "ARRAY_REQUIRED");
+
+  const nonemptyOutput = executePC2A2(createPC2A1Session({
+    $rel: [
+      { $obj: [9], $rel: "=" },
+      { $obj: [], $rel: "foreachobj", $sub: null }
+    ]
+  }), { entry: "EXEC" });
+  assert.equal(nonemptyOutput.diagnostic, "ITERATOR_OUTPUT_NOT_EMPTY");
+
+  const overlap = executePC2A2(createPC2A1Session({
+    $rel: {
+      $obj: { $ref: "$rel" },
+      $rel: "foreachobj",
+      $sub: null
+    }
+  }), { entry: "EXEC" });
+  assert.equal(overlap.diagnostic, "ITERATOR_OUTPUT_OVERLAP");
+});
+
+test("PC2-A2 iterator read gate blocks aggregate/previous-result access through parent contextual address", () => {
+  const source = {
+    $obj: [1],
+    $rel: "foreachobj",
+    $sub: {
+      $obj: { $ref: "$$rel/0" },
+      $rel: "="
+    }
+  };
+  const session = createPC2A1Session(source);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+  assert.equal(run.diagnostic, "ITERATOR_UNPROVEN_EFFECT");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+});
+
+test("PC2-A2 iterator ownership follows actual shared identity, not the alternative alias path", () => {
+  const source = {
+    input: [{ x: { v: 1 } }],
+    foreign: { v: 0 },
+    share: {
+      $obj: { $ref: "$ent/input/0/x" },
+      $rel: "ALIAS",
+      $sub: { $ref: "$ent/foreign" }
+    },
+    loop: {
+      $obj: { $ref: "$ent/input" },
+      $rel: "foreachobj",
+      $sub: {
+        $obj: 9,
+        $rel: "=",
+        $sub: { $ref: "$$ent/foreign/v" }
+      }
+    },
+    $rel: [
+      { $ref: "$ent/share" },
+      { $ref: "$ent/loop" }
+    ]
+  };
+  const session = createPC2A1Session(source);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+  assert.equal(run.diagnostic, "ITERATOR_FOREIGN_WRITE");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+  assert.ok(run.attemptedTrace.some(event => event.op === "alias" && event.status === "OK"));
+});
+
+test("PC2-A2 iterator cannot materialize a new member on a pre-existing input owner", () => {
+  const source = {
+    $obj: [{}],
+    $rel: "foreachobj",
+    $sub: {
+      $obj: 9,
+      $rel: "=",
+      $sub: { $ref: "$obj/new" }
+    }
+  };
+  const session = createPC2A1Session(source);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+  assert.equal(run.diagnostic, "ITERATOR_FOREIGN_WRITE");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+});
+
+test("PC2-A2 late second-item cold effect rolls back first-item result, cache, allocator and frames", () => {
+  const source = {
+    $rel: [
+      { $obj: { $ref: "safe" }, $rel: "=" },
+      { $obj: null, $rel: "=" },
+      {
+        $obj: ["safe", "missing"],
+        $rel: "foreachobj",
+        $sub: "$obj"
+      }
+    ]
+  };
+  const session = createPC2A1Session(source, {
+    registry: { safe: { $obj: 1, $rel: "=" } }
+  });
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+
+  assert.equal(run.diagnostic, "ITERATOR_UNPROVEN_EFFECT");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+  const items = run.attemptedTrace.filter(event =>
+    event.op === "iterator-item" && event.kind === "foreachobj");
+  assert.equal(items.length, 2);
+  assert.ok(run.attemptedTrace.some(event => event.op === "host.cache-hit" && event.name === "safe"));
+});
+
+test("PC2-A2 nested iterator is fail-closed inside an owned item", () => {
+  const source = {
+    $obj: [1],
+    $rel: "foreachobj",
+    $sub: {
+      $obj: [],
+      $rel: "foreachobj",
+      $sub: null
+    }
+  };
+  const session = createPC2A1Session(source);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+  assert.equal(run.diagnostic, "ITERATOR_UNPROVEN_EFFECT");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+});
+
+test("PC2-A2 new-effect multi-H rejects with the effect in either sorted sibling position", () => {
+  for (const aliasFirst of [true, false]) {
+    const aliasKey = aliasFirst ? "$rel/a" : "$rel/z";
+    const copyKey = aliasFirst ? "$rel/z" : "$rel/a";
+    const controller = {
+      [aliasKey]: {
+        $obj: { $ref: "$ent/a" },
+        $rel: "ALIAS",
+        $sub: { $ref: "$ent/b" }
+      },
+      [copyKey]: { $obj: 1, $rel: "=" }
+    };
+    const source = { a: { x: 1 }, b: { x: 2 }, $rel: controller };
+    const session = createPC2A1Session(source);
+    const before = snapshotPC2A1Session(session);
+    const run = executePC2A2(session, { entry: "EXEC" });
+    assert.equal(run.diagnostic, "H_UNPROVEN_INTERFERENCE");
+    assert.equal(snapshotPC2A1Session(run.session), before);
+    assert.equal(run.attemptedTrace.filter(event => event.op === "H-route").length, 0);
+  }
+});
+
+test("PC2-A2 H probes and real execution consume one shared monotonic work budget", () => {
+  const source = {};
+  for (let i = 0; i < 256; i += 1) {
+    source[`$rel/k${String(i).padStart(3, "0")}`] = 1;
+  }
+  const session = createPC2A1Session(source);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+
+  assert.equal(run.diagnostic, "EXECUTION_FUEL_EXHAUSTED");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+  assert.ok(run.attemptedTrace.some(event => event.op === "execution-fuel"));
+  // Root dispatch + 256 probes consume 257 units; only 255 real H routes fit.
+  assert.equal(run.attemptedTrace.filter(event => event.op === "H-route").length, 255);
+});
