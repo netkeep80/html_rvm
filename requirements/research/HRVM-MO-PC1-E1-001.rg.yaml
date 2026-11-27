@@ -1,0 +1,13 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-PC1-E1-001
+normative: "### HRVM-MO-PC1-E1-001 — Исследовательский PC1-R2-E1 witness MUST исполнять принятую ограниченную основу через first-class duplet occurrences и enriched frame occurrences с явными H/V/Q, contextual roots, identity/alias/parent/order observables и условной bundle-factorization; обязательные W1–W8 MUST воспроизводиться детерминированно без общего JSON-интерпретатора, PR #40 architecture, неявного global fallback или универсальной онтологической претензии."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-REF-001 }
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-EXEC-001 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "research/pc1/e1-witness.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/pc1-e1-witness.test.mjs" }
