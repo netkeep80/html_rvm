@@ -132,14 +132,17 @@ function observeReads(tx, ids) {
   for (const id of ids) tx.readDependencies.push(id);
 }
 
+function guardCapabilityRead(context, slot, relation) {
+  if (!context.capability) return;
+  if (context.capability.forbiddenReadP?.has(slot.id)) reject("ITERATOR_UNPROVEN_EFFECT");
+  if (relation.target.sort === "N" && context.capability.forbiddenReadN?.has(relation.target.id)) {
+    reject("ITERATOR_UNPROVEN_EFFECT");
+  }
+}
+
 function readRelation(tx, slot) {
   const relation = requireRelation(tx.state, slot);
-  if (tx.capability) {
-    if (tx.capability.forbiddenReadP?.has(slot.id)) reject("ITERATOR_UNPROVEN_EFFECT");
-    if (relation.target.sort === "N" && tx.capability.forbiddenReadN?.has(relation.target.id)) {
-      reject("ITERATOR_UNPROVEN_EFFECT");
-    }
-  }
+  guardCapabilityRead(tx, slot, relation);
   observeReads(tx, [slot.id]);
   return relation;
 }
@@ -400,7 +403,8 @@ function rootSlotForParsed(context, frameId, parsed) {
     }
     slot = P(frame.roles[parsed.role]);
   }
-  requireRelation(context.state, slot);
+  const relation = requireRelation(context.state, slot);
+  guardCapabilityRead(context, slot, relation);
   return slot;
 }
 
@@ -437,6 +441,7 @@ function resolveParsedExisting(context, frameId, parsed) {
     const [id, member] = matches[0];
     if (!member.bound) reject("UNBOUND_SLOT");
     slot = P(id);
+    guardCapabilityRead(context, slot, member);
     readSlots.push(id);
   }
   return { slot, readSlots, parsed };
