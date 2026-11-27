@@ -69,5 +69,30 @@ try{
  check(await evalv("!!document.querySelector('[data-from=\"P:mutual\"][data-to=\"P:shared\"]')&&!!document.querySelector('[data-from=\"P:shared\"][data-to=\"P:mutual\"]')"),"finite mutual cycle");
  check(await evalv("!!document.querySelector('[data-identity=\"P:s1\"]')&&!!document.querySelector('[data-identity=\"P:s2\"]')"),"equal pair distinct identities");
  await shot("04-sharing-cycles","header");
+
+ await set("example","where","change");await clickId("run");
+ await selectSource('"4"');check(await evalv("document.querySelectorAll('#occurrences button').length===1&&document.querySelectorAll('#result-occurrences button').length===1"),"same selected payload in source and result");
+ await clickPoint(await pos('#timeline button[data-tentative="false"]'));
+ check(await evalv("JSON.parse(document.getElementById('transition-detail').textContent).trace.some(t=>t.kind==='E1.Q')"),"real E1 trace inspector");
+ await clickId("reset");
+ await set("source",'{"$rel/a":"rmvm/version","$rel/z":"unknown"}');await clickId("apply");
+ const prior=await exact();await clickId("step");await clickId("step");
+ check((await exact())===prior&&await evalv("document.getElementById('last-reject').textContent.includes('UNKNOWN_CONTROLLER')&&!document.querySelector('#timeline button')"),"late reject restores exact state and commits no history");
+ await set("example","ent_abc","change");
+ await evalv("window.prompt=()=>'\"d\"';true");await clickId("new-atom");
+ check(await evalv("JSON.parse(document.getElementById('selection').textContent).payload==='d'"),"create atom");
+ const created=await evalv("JSON.parse(document.getElementById('selection').textContent).identity.id");
+ await clickId("new-relation");
+ await clickPoint(await pos('[data-anchor="P:r2"]'));
+ await clickPoint(await pos('[data-anchor="N:'+created+'"]'));
+ check(await evalv("JSON.parse(document.getElementById('selection').textContent).owner.id==='r2'"),"create relation by selecting identity endpoints");
+ await clickId("delete-identity");
+ check(await evalv("!document.querySelector('[data-identity=\"P:studio:P:1\"]')"),"delete newly created relation");
+ await clickPoint(await pos('[data-anchor="N:'+created+'"]'));await clickId("delete-identity");
+ check(await evalv("!document.querySelector('[data-identity=\"N:studio:N:1\"]')"),"delete unreferenced atom");
+ await clickPoint(await pos('[data-anchor="P:s1"]'));const beforeReject=await exact();await clickId("delete-identity");
+ check((await exact())===beforeReject&&await evalv("document.getElementById('last-reject').textContent.includes('RELATION_REFERENCED')"),"referenced deletion rejected atomically");
+ await clickId("zoom-out");await shot("05-editing","header");
+
  console.log("Unified Studio checks:",n);
 }finally{ws?.close();if(browser&&browser.exitCode===null&&browser.signalCode===null){const closed=new Promise(r=>browser.once("close",r));browser.kill();await Promise.race([closed,sleep(3000)]);if(browser.exitCode===null&&browser.signalCode===null){browser.kill("SIGKILL");await Promise.race([closed,sleep(1000)]);}}server.closeAllConnections();await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true,maxRetries:10,retryDelay:150});}

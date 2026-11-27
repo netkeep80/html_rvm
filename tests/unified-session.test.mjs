@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity} from "../site/unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity,readDocumentDraft,readLocalJSON} from "../site/unified-session.js";
 import {stepNaturalJSON,executeNaturalJSON,subjectivateNaturalJSON,inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {serializeE1State,deserializeE1State,frameRoleSlot} from "../research/pc1/e1-witness.mjs";
 const env={version:"01.77",meta:{engine:"test"}};
@@ -87,4 +87,30 @@ test("actual R0/E1 traces partition by steps, and REJECT commits none",()=>{
  assert.equal(Object.getOwnPropertySymbols(n.value.program).length,0);
  assert.deepEqual(executeNaturalJSON(subjectivateNaturalJSON({"$rel/a":"rmvm/version","$rel/z":"unknown"}),env).trace,[]);
  assert.deepEqual(executeNaturalJSON(subjectivateNaturalJSON({a:1}),env).trace,[]);
+});
+
+test("create duplet, delete reject, no resurrection and ordered history",()=>{
+ const s=createUnifiedSession(null,{model:mathematicalExample("ent_abc")});
+ const a=s.createAtom("d"),r=s.createRelation({sort:"P",id:"r2"},a.identity);
+ assert.equal(r.transition.outcome.status,"OK");
+ assert.equal(s.applied.state.mo.relations.get(r.identity.id).owner.id,"r2");
+ const before=s.lossless();assert.equal(s.remove(a.identity).outcome.status,"REJECT");
+ assert.equal(s.lossless(),before);assert.equal(s.history.length,2);assert.equal(s.lastReject.kind,"edit");
+ assert.equal(s.remove(r.identity).outcome.status,"OK");assert.equal(s.remove(a.identity).outcome.status,"OK");
+ assert.notEqual(s.createAtom("d").identity.id,a.identity.id);
+});
+test("advanced atomic rollback and root guard",()=>{
+ const s=createUnifiedSession(),before=s.lossless();
+ const t=s.atomic([{op:"createNode",id:"temporary",kind:"null",payload:null},{op:"deleteNode",id:"absent"}]);
+ assert.equal(t.outcome.status,"REJECT");assert.equal(s.lossless(),before);assert.equal(s.history.length,0);
+ assert.throws(()=>s.atomic([{op:"deleteRelation",id:"j1:source-root"}]));assert.equal(s.lossless(),before);
+});
+test("read-only DocumentPort import is detached, explicit draft only",async()=>{
+ const original={a:1};let reads=0,writes=0;
+ const reader={async read(){reads++;return original},async commit(){writes++;throw Error("writer forbidden")}};
+ const text=await readDocumentDraft(reader,{},"source");
+ const s=createUnifiedSession(),before=s.lossless();
+ s.stageDocument(text);assert.equal(s.dirty,true);assert.equal(s.lossless(),before);
+ assert.equal(s.apply(),true);s.createAtom(3);assert.equal(original.a,1);assert.equal(reads,1);assert.equal(writes,0);
+ assert.deepEqual(JSON.parse(await readLocalJSON('{"b":2}')),{b:2});
 });

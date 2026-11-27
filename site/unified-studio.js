@@ -1,13 +1,16 @@
-import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,rangesForIdentity} from "./unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,rangesForIdentity,readLocalJSON} from "./unified-session.js";
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
-let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null,zoom=1;
+let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null,zoom=1,creation=null;
 const source=$("source"),svg=$("network"),ns="http://www.w3.org/2000/svg",json=x=>JSON.stringify(x,null,2);
 const key=e=>e.sort+":"+e.id, endpoint=k=>({sort:k[0],id:k.slice(2)});
 function el(tag,attrs={},text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;return e}
 function coord(ev){const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
-function choose(k,highlight=true){selected=k;render();if(highlight)highlightSource()}
+function choose(k,highlight=true){
+ if(creation){act(()=>{if(!creation.begin){creation.begin=endpoint(k);return}const c=session.createRelation(creation.begin,endpoint(k));creation=null;if(c.transition.outcome.status==="OK"){syncText();selected=key(c.identity)}});return}
+ selected=k;render();if(highlight)highlightSource()
+}
 function highlightSource(){
  if(!selected||view||session.dirty||session.appliedText===null)return;
  const ranges=rangesForIdentity(session.applied,session.appliedText,endpoint(selected));
@@ -52,9 +55,17 @@ function render(){
  let predicate=false;try{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;predicate=c==="is_string"||c==="is_null"}catch{}
  $("reflect").disabled=session.running||session.dirty||!session.executable||!predicate;
  $("apply").disabled=session.running||!session.dirty;
+ const canEdit=!view&&!session.running&&!session.dirty&&!session.branch&&!session.inspection;
+ for(const id of ["new-atom","new-relation","advanced-apply"])$(id).disabled=!canEdit;
+ $("delete-identity").disabled=!canEdit||!selected||selected==="P:j1:source-root";
+ $("cancel-create").hidden=!creation;$("create-note").textContent=creation?(creation.begin?"Выберите конец нового дуплета":"Выберите начало нового дуплета"):"";
+ $("import-json").disabled=session.running||session.dirty;$("export-json").disabled=session.appliedText===null;
+ $("import-exact").disabled=session.running||session.dirty;
  network(p,f?.roles);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";
+ $("role-cards").replaceChildren();if(f){for(const [role,id] of Object.entries(f.roles)){const b=document.createElement("button");b.textContent=role;b.title=id;b.dataset.alias=String(Object.values(f.roles).filter(x=>x===id).length>1);b.onclick=()=>choose("P:"+id);$("role-cards").append(b)}}
+ $("last-reject").textContent=session.lastReject?"REJECT · "+session.lastReject.diagnostic+" · committed state unchanged":"";
  const resultRun=viewRun??session.branch;
  $("result").textContent=viewEvent?json(viewEvent.result):resultRun?json(resultRun.result):session.running?"Предварительное осуществление":"—";
  $("exact").textContent=session.lossless();
@@ -63,11 +74,16 @@ function render(){
  if(ep&&resultRun&&!viewEvent){const v=projectionOccurrences(resultRun.program.state.mo,resultRun.resultEndpoint,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=locateVPath(resultRun.program.state.mo,resultRun.resultEndpoint,path);if(q.ok)choose(key(q.node))};$("result-occurrences").append(b)}}
  $("timeline").replaceChildren();
  for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;viewEvent=e;viewRun=null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json({observation:e,trace:snapshots.find(x=>x.event===e)?.trace??[]});render()};$("timeline").append(b)}
- for(const [i,run] of session.runs.entries()){const b=document.createElement("button");b.textContent="Run "+(i+1)+": "+json(run.result);b.onclick=()=>{view=run.program;viewRun=run;viewEvent=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()};$("timeline").append(b)}
- for(const e of session.edits){const b=document.createElement("button");b.textContent=e.kind==="Q"?"Q: reflection":e.action.op;b.onclick=()=>{$("transition-detail").textContent=json(e)};$("timeline").append(b)}
+ let runNo=0;
+ for(const entry of session.history){const b=document.createElement("button");
+  if(entry.kind==="run"){const run=entry.run;b.textContent="Run "+(++runNo)+": "+json(run.result);b.onclick=()=>{creation=null;view=run.program;viewRun=run;viewEvent=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()}}
+  else{b.textContent=entry.kind==="Q"?"Q: reflection":entry.actions.map(x=>x.op).join(", ");b.onclick=()=>{$("transition-detail").textContent=json(entry)}}
+  $("timeline").append(b)
+ }
+
 }
 function act(fn){try{fn();render()}catch(e){render();$("status").textContent=e.message}}
-function clearView(){view=null;viewEvent=null;viewRun=null;frame=null;$("transition-detail").textContent=""}
+function clearView(){creation=null;view=null;viewEvent=null;viewRun=null;frame=null;$("transition-detail").textContent=""}
 function syncText(){source.value=session.draft??""}
 svg.addEventListener("pointerdown",ev=>{if(ev.button!==0)return;const g=ev.target.closest("[data-identity]");if(!g)return;const k=g.dataset.identity,p=coord(ev),side=ev.target.dataset.socket;gesture={k,side,start:p,base:session.layout.get(k)??{x:g.transform.baseVal.getItem(0).matrix.e,y:g.transform.baseVal.getItem(0).matrix.f}};svg.setPointerCapture(ev.pointerId);ev.preventDefault()});
 svg.addEventListener("pointermove",ev=>{if(!gesture)return;const p=coord(ev);if(Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<5&&!gesture.moved)return;gesture.moved=true;if(gesture.side){gesture.line?.remove();gesture.line=el("line",{x1:gesture.start.x,y1:gesture.start.y,x2:p.x,y2:p.y,stroke:"#f7d17b","stroke-width":2,"pointer-events":"none"});svg.append(gesture.line)}else{session.layout.set(gesture.k,{x:Math.max(50,gesture.base.x+p.x-gesture.start.x),y:Math.max(30,gesture.base.y+p.y-gesture.start.y)});render()}});
@@ -91,7 +107,19 @@ const env=()=>({version,meta:{engine:"html_rvm",slice:"J1"}});
 $("step").onclick=()=>act(()=>{clearView();session.step(env())});
 $("run").onclick=()=>act(()=>{clearView();session.run(env())});
 $("reflect").onclick=()=>act(()=>{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;const e=session.reflect(["$sub"],"R",c==="is_string"?"is_null":"is_string");syncText();selected="P:"+e.sourceSlot.id;clearView()});
-$("export-exact").onclick=()=>{const u=URL.createObjectURL(new Blob([session.lossless()],{type:"application/json"}));const a=document.createElement("a");a.href=u;a.download="mo-exact.json";a.click();URL.revokeObjectURL(u)};
-$("import-exact").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session;try{const text=await file.text();if(owner!==session)return;act(()=>{if(session.importExact(text)){syncText();selected=null;clearView()}})}finally{e.target.value=""}};
+function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),0)}
+$("export-exact").onclick=()=>download(session.lossless(),"mo-exact.json");
+$("export-json").onclick=()=>act(()=>download(session.exportSource(),"natural.json"));
+$("import-json").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session,base=owner.applied;try{
+ const text=await readLocalJSON(await file.text());if(owner!==session||base!==owner.applied)return;
+ act(()=>{session.stageDocument(text);syncText();clearView()})
+ }catch(err){$("status").textContent=err.message}finally{e.target.value=""}};
+$("new-atom").onclick=()=>act(()=>{const text=prompt("JSON scalar","null");if(text===null)return;const c=session.createAtom(JSON.parse(text));if(c.transition.outcome.status==="OK"){syncText();selected=key(c.identity)}});
+$("new-relation").onclick=()=>act(()=>{creation={begin:null}});
+$("cancel-create").onclick=()=>act(()=>{creation=null});
+$("delete-identity").onclick=()=>act(()=>{if(selected&&confirm("Удалить "+selected+"?")){const t=session.remove(endpoint(selected));if(t.outcome.status==="OK"){selected=null;syncText()}}});
+$("advanced-apply").onclick=()=>act(()=>{const t=session.atomic(JSON.parse($("advanced-actions").value));if(t.outcome.status==="OK"){syncText();selected=null;clearView()}});
+
+$("import-exact").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session,base=owner.applied;try{const text=await file.text();if(owner!==session||base!==owner.applied)return;act(()=>{if(session.importExact(text)){syncText();selected=null;clearView()}})}finally{e.target.value=""}};
 render();
 fetch("./build-info.json").then(r=>{if(!r.ok)throw Error("build metadata");return r.json()}).then(m=>{if(!/^[0-9]{2}\.[0-9]{2}$/.test(m.version))throw Error("invalid version");version=m.version;$("version").textContent=version;render()}).catch(()=>{$("version").textContent="Нет build-info · Run/Step недоступны"});
