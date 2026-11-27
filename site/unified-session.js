@@ -83,7 +83,7 @@ export async function readLocalJSON(text){
 export function createUnifiedSession(text = examples.where,{model=null}={}) {
  let applied=model??parseSource(text),appliedText=model?null:text,draft=appliedText;
  let branch=null,attempt=null,tentative=[],diagnostic=null,inspection=null,projectionDiagnostic=model?"MATHEMATICAL_EXAMPLE":null;
- let edits=[],runs=[],history=[],lastReject=null;
+ let edits=[],runs=[],history=[],lastReject=null,projectionPartial=!!model;
  const layout=new Map();
  function reset(){attempt?.return();attempt=null;tentative=[];branch=null;diagnostic=null;inspection=null;lastReject=null}
  function guard(){if(attempt||draft!==appliedText)throw Error("Stop or apply first")}
@@ -100,7 +100,7 @@ export function createUnifiedSession(text = examples.where,{model=null}={}) {
  }
  function publish(program){let projection=null,error=null;
   try{projection=JSON.stringify(objectivateNaturalJSON(program),null,2)}catch(e){error=e.diagnostic??e.message}
-  reset();applied=program;draft=appliedText=projection;projectionDiagnostic=error;
+  reset();applied=program;draft=appliedText=projection;projectionDiagnostic=error;projectionPartial=true;
  }
  function step(env){
   if(!attempt){guard();if(appliedText===null||!applied.state.mo.relations.has("j1:source-root"))throw Error("Natural JSON execution unavailable for this model");
@@ -113,14 +113,14 @@ export function createUnifiedSession(text = examples.where,{model=null}={}) {
   }catch(e){reset();diagnostic=e.message;throw e}
  }
  return {
-  layout,get draft(){return draft},get appliedText(){return appliedText},get dirty(){return draft!==appliedText},
+  layout,get draft(){return draft},get appliedText(){return appliedText},get dirty(){return draft!==appliedText},get projectionPartial(){return projectionPartial},
   get applied(){return applied},get branch(){return branch},get running(){return attempt!==null},
   get tentative(){return tentative.slice()},get diagnostic(){return diagnostic},get projectionDiagnostic(){return projectionDiagnostic},
   get inspection(){return inspection},get edits(){return edits.slice()},get runs(){return runs.slice()},get history(){return history.slice()},get lastReject(){return lastReject},
   get executable(){return appliedText!==null&&applied.state.mo.relations.has("j1:source-root")},
   get visible(){return tentative.at(-1)?.program??branch?.program??inspection?.program??applied},
   edit(text){if(attempt)throw Error("Stop execution before editing");draft=text},
-  apply(){if(attempt)throw Error("Stop execution before Apply");try{const next=parseSource(draft);reset();applied=next;appliedText=draft;projectionDiagnostic=null;layout.clear();edits=[];runs=[];history=[];return true}catch(e){diagnostic=e.message;return false}},
+  apply(){if(attempt)throw Error("Stop execution before Apply");try{const next=parseSource(draft);reset();applied=next;appliedText=draft;projectionDiagnostic=null;projectionPartial=false;layout.clear();edits=[];runs=[];history=[];return true}catch(e){diagnostic=e.message;return false}},
   discard(){if(attempt)throw Error("Stop execution before discarding draft");draft=appliedText;diagnostic=null},
   reset,step,run(env){while(!step(env)){}return branch},
   inspect(){guard();if(!this.executable)throw Error("No Natural JSON context");inspection=instantiateNaturalEntity(applied);branch=null;diagnostic=null;return inspection},

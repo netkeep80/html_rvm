@@ -34,7 +34,7 @@ test("MO Studio atomic reject and invalid imports preserve full state",()=>{
 });
 test("MO Studio Pages artifact includes actual R0 modules and accessible entry",()=>{
  const d=mkdtempSync(join(tmpdir(),"mo-studio-"));
- try{const r=buildPages(join(d,"dist"),{version:"01.07"});
+ try{const r=buildPages(join(d,"dist"),{version:"01.07",legacyRegression:true});
  for(const f of ["site/mo-studio.html","site/mo-studio.js","site/mo-studio-ui.js","site/mo-studio.css","site/mo-visual-graph.js","site/mo-projection-sync.js","site/mo-transition-observer.js","src/mo-core.js","src/mo-json.js","src/mo-reference.js"])assert.ok(existsSync(join(r.destination,f)),f);
  assert.match(readFileSync(join(r.destination,"site/index.html"),"utf8"),/href="\.\/mo-studio.html"/);
  for(const f of ["site/mo-studio.js","site/mo-studio-ui.js"])execFileSync(process.execPath,["--check",join(r.destination,f)]);

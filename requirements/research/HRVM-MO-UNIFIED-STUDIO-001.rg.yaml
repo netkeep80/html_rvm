@@ -37,3 +37,5 @@ relations:
     target: { kind: artifact, path: "tools/smoke-mo-v2.mjs" }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: "tools/smoke-mo-v3.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/mo-studio.test.mjs" }

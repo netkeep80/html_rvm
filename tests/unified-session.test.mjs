@@ -114,3 +114,12 @@ test("read-only DocumentPort import is detached, explicit draft only",async()=>{
  assert.equal(s.apply(),true);s.createAtom(3);assert.equal(original.a,1);assert.equal(reads,1);assert.equal(writes,0);
  assert.deepEqual(JSON.parse(await readLocalJSON('{"b":2}')),{b:2});
 });
+
+test("projection remains marked partial after structural edit and exact import",()=>{
+ const s=createUnifiedSession('{"a":1}');
+ assert.equal(s.projectionPartial,false);
+ s.createAtom(2);assert.equal(s.projectionPartial,true);
+ assert.deepEqual(JSON.parse(s.exportSource()),{a:1});
+ const other=createUnifiedSession();assert.equal(other.importExact(s.lossless()),true);
+ assert.equal(other.projectionPartial,true);
+});

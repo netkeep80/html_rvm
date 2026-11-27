@@ -94,5 +94,32 @@ try{
  check((await exact())===beforeReject&&await evalv("document.getElementById('last-reject').textContent.includes('RELATION_REFERENCED')"),"referenced deletion rejected atomically");
  await clickId("zoom-out");await shot("05-editing","header");
 
+ // Both public historical entry points lead to the canonical UI, not a generation selector.
+ const publicBase="http://127.0.0.1:"+server.address().port;
+ for(const route of ["/","/site/","/site/mo-studio.html"]){
+  await send("Page.navigate",{url:publicBase+route});
+  for(let i=0;i<100;i++){if(await evalv("location.pathname.endsWith('/unified-studio.html')&&!!document.querySelector('#network [data-identity]')"))break;await sleep(50)}
+  check(await evalv("location.pathname.endsWith('/unified-studio.html')&&!!document.querySelector('#network [data-identity]')"),"canonical redirect "+route);
+ }
+ await evalv("window.confirm=()=>true;true");
+ await set("example","ent_abc","change");await clickId("zoom-out");
+ const begin=await pos('[data-identity="P:r2"] [data-socket="B"]');
+ const to=await rawpos('[data-anchor="P:r2"]');
+ await drag(begin,to);
+ check(await evalv("!!document.querySelector('[data-from=\"P:r2\"][data-side=B][data-to=\"P:r2\"]')"),"trusted B-socket drag to relation identity");
+ // Actual local file inputs, through CDP DOM.setFileInputFiles; no simulated semantic execution.
+ async function upload(id,path){const doc=await send("DOM.getDocument");const node=await send("DOM.querySelector",{nodeId:doc.root.nodeId,selector:"#"+id});await send("DOM.setFileInputFiles",{nodeId:node.nodeId,files:[path]});await frame()}
+ const saved=await exact(),exactFile=join(tmp,"model.json"),jsonFile=join(tmp,"source.json");
+ await writeFile(exactFile,saved);await writeFile(jsonFile,'{"a":7,"$rel":"rmvm/version"}');
+ await upload("import-json",jsonFile);
+ for(let i=0;i<100;i++){if(await evalv("document.getElementById('source').value.includes('7')"))break;await sleep(25)}
+ check((await exact())===saved&&await evalv("document.getElementById('status').textContent.includes('DIRTY')"),"file import stages independent JSON draft");
+ await clickId("apply");check(await evalv("JSON.parse(document.getElementById('source').value).a===7"),"explicit file Apply");
+ await evalv("document.getElementById('exact-details').open=true;true");await upload("import-exact",exactFile);
+ for(let i=0;i<100;i++){if((await exact())===saved)break;await sleep(25)}
+ check((await exact())===saved,"exact file roundtrip preserves model identities");
+ await shot("06-exact-import","header");
+
+
  console.log("Unified Studio checks:",n);
 }finally{ws?.close();if(browser&&browser.exitCode===null&&browser.signalCode===null){const closed=new Promise(r=>browser.once("close",r));browser.kill();await Promise.race([closed,sleep(3000)]);if(browser.exitCode===null&&browser.signalCode===null){browser.kill("SIGKILL");await Promise.race([closed,sleep(1000)]);}}server.closeAllConnections();await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true,maxRetries:10,retryDelay:150});}

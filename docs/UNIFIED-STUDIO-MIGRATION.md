@@ -7,7 +7,7 @@ Public packaging: one UI at site/unified-studio.html; root and two historical en
 | Historical obligation | Replacement | Evidence / remaining |
 |---|---|---|
 | S1A dirty/apply/invalid, independent working state | unified-session draft, applied, branch, reset | unified-session tests and unified Chromium |
-| S1A read-only DocumentReader, explicit import/export, zero writer | readDocumentDraft, readLocalJSON using MemoryDocumentProvider and createWorkingSession; explicit source Apply, exact export | new async contract test; original provider and working-session suites retained; browser file interaction coverage pending |
+| S1A read-only DocumentReader, explicit import/export, zero writer | readDocumentDraft, readLocalJSON using MemoryDocumentProvider and createWorkingSession; explicit source Apply, exact export | new async contract test; original provider and working-session suites retained; actual file input browser checks in smoke-mo-unified; explicit export action still needs visual walkthrough |
 | V1 layout vs semantic edits | B/E pointer drag, glyph movement, zoom, creation/removal | original suites retained; unified browser drag and creation/deletion tests |
 | V1 relation identity, sharing, self/mutual cycles, no resurrection | exact identity glyphs, R0 atomic actions plus E1 validation | mathematical fixtures, session tests, browser tests |
 | V2 source ↔ exact identity, typed path, multiplicity | sourceRanges, locateVPath, projectionOccurrences; key/payload selection; exact inspector | session and browser tests; projection is partial and not lossless; raw duplicates rejected |
@@ -17,4 +17,4 @@ Public packaging: one UI at site/unified-studio.html; root and two historical en
 | Git-derived version, static packaging | build-info version and canonical redirects | packaging tests plus existing version suite |
 | PC1 executable/reflection | J1 version/where, ORS, Q, state-only replay | J1 and unified tests; copy/alias parity OPEN |
 
-No full industrial parity or compactness claim. Exact historical fixture comparison is bounded to accepted version/where. Visual walkthrough, independent audit, outstanding UI coverage and explicit author merge authorization are required before publication. No old assets removed from Git; this migration changes the public package only.
+No full industrial parity or compactness claim. Exact historical fixture comparison is bounded to accepted version/where. Visual walkthrough, independent audit, review of remaining UI coverage and explicit author merge authorization are required before publication. No old assets removed from Git; this migration changes the public package only.

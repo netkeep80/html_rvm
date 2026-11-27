@@ -48,7 +48,7 @@ function render(){
  const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
  source.disabled=session.running;source.placeholder=session.projectionDiagnostic??"";
- $("projection-note").textContent=view?"Историческое состояние; исходный редактор показывает текущую применённую модель":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":"Выбор ключа → отношение; выбор значения → payload";
+ $("projection-note").textContent=view?"Историческое состояние; исходный редактор показывает текущую применённую модель":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":session.projectionPartial?"JSON — частичная проекция МО. Точная модель: Export exact.":"Выбор ключа → отношение; выбор значения → payload";
  for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
  $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
  $("inspect").disabled=session.running||session.dirty||!session.executable;
@@ -96,7 +96,7 @@ $("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросит�
 source.oninput=()=>act(()=>session.edit(source.value));
 function selectSource(){if(!session.dirty&&session.appliedText!==null){const e=sourceIdentityAt(session.applied,session.appliedText,source.selectionStart);if(e)choose(key(e),false)}}
 source.addEventListener("click",selectSource);source.addEventListener("keyup",selectSource);
-$("apply").onclick=()=>act(()=>{if(session.apply()){selected=null;clearView()}});
+$("apply").onclick=()=>act(()=>{if(session.projectionPartial&&!confirm("Apply заново субъективирует JSON. Дополнительные отношения и текущие идентичности не сохраняются. Продолжить?"))return;if(session.apply()){selected=null;clearView()}});
 $("discard").onclick=()=>act(()=>{session.discard();syncText()});
 $("reset").onclick=()=>act(()=>{session.reset();clearView()});
 $("layout-reset").onclick=()=>act(()=>{session.layout.clear();zoom=1});
@@ -109,7 +109,7 @@ $("run").onclick=()=>act(()=>{clearView();session.run(env())});
 $("reflect").onclick=()=>act(()=>{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;const e=session.reflect(["$sub"],"R",c==="is_string"?"is_null":"is_string");syncText();selected="P:"+e.sourceSlot.id;clearView()});
 function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),0)}
 $("export-exact").onclick=()=>download(session.lossless(),"mo-exact.json");
-$("export-json").onclick=()=>act(()=>download(session.exportSource(),"natural.json"));
+$("export-json").onclick=()=>act(()=>{if(session.projectionPartial&&!confirm("Экспорт JSON сохраняет значения, но не все идентичности и отношения. Продолжить?"))return;download(session.exportSource(),"natural.json")});
 $("import-json").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session,base=owner.applied;try{
  const text=await readLocalJSON(await file.text());if(owner!==session||base!==owner.applied)return;
  act(()=>{session.stageDocument(text);syncText();clearView()})
