@@ -1,69 +1,91 @@
-import {createUnifiedSession,examples} from "./unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,rangesForIdentity} from "./unified-session.js";
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
+import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
-let session=createUnifiedSession(), selected=null, frame=null, version=null, history=[];
-const source=$("source"), svg=$("network"), ns="http://www.w3.org/2000/svg";
-const json=x=>JSON.stringify(x,null,2);
+let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,gesture=null;
+const source=$("source"),svg=$("network"),ns="http://www.w3.org/2000/svg",json=x=>JSON.stringify(x,null,2);
+const key=e=>e.sort+":"+e.id, endpoint=k=>({sort:k[0],id:k.slice(2)});
 function el(tag,attrs={},text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;return e}
-function key(e){return e.sort+":"+e.id}
-function network(program){
+function coord(ev){const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+function choose(k,highlight=true){selected=k;render();if(highlight)highlightSource()}
+function highlightSource(){
+ if(!selected||session.dirty||session.appliedText===null)return;
+ const ranges=rangesForIdentity(session.applied,session.appliedText,endpoint(selected));
+ if(ranges.length){const x=ranges[0];source.setSelectionRange(x.start,x.end)}
+}
+function network(program,roles={}){
  const mo=program.state.mo, records=[...Array.from(mo.nodes,([id,r])=>({sort:"N",id,r})),...Array.from(mo.relations,([id,r])=>({sort:"P",id,r}))];
- svg.replaceChildren();const cols=4, pos=new Map();
+ svg.replaceChildren();const cols=4,pos=new Map();
  records.forEach((e,i)=>pos.set(key(e),session.layout.get(key(e))??{x:95+i%cols*180,y:45+Math.floor(i/cols)*76}));
- svg.setAttribute("width",760);svg.setAttribute("height",Math.max(420,90+Math.ceil(records.length/cols)*76));
+ svg.setAttribute("width",Math.max(760,...[...pos.values()].map(x=>x.x+70)));svg.setAttribute("height",Math.max(420,...[...pos.values()].map(x=>x.y+55)));
  for(const e of records.filter(e=>e.sort==="P")){
   const p=pos.get(key(e));
   for(const [side,end] of [[-1,e.r.owner],[1,e.r.target]]){if(!end)continue;const q=pos.get(key(end));if(!q)continue;
    const x=p.x+side*48;const d=key(e)===key(end)?`M${x} ${p.y} C${x+side*38} ${p.y-42} ${p.x} ${p.y-42} ${p.x} ${p.y}`:`M${x} ${p.y} Q${x} ${q.y} ${q.x} ${q.y}`;
-   svg.append(el("path",{d,fill:"none",stroke:side===-1?"#e0b56a":"#76bbeb","stroke-width":1.4,opacity:.72}));
+   svg.append(el("path",{d,fill:"none",stroke:side===-1?"#e0b56a":"#76bbeb","stroke-width":selected===key(e)?2.8:1.4,opacity:.75,"data-from":key(e),"data-to":key(end),"data-side":side===-1?"B":"E"}));
   }
  }
  for(const e of records){
-  const p=pos.get(key(e)), g=el("g",{transform:`translate(${p.x} ${p.y})`,tabindex:0,role:"button","aria-label":key(e),"data-identity":key(e)});
-  g.append(el("rect",{x:-48,y:-17,width:96,height:34,rx:e.sort==="P"?10:17,fill:e.sort==="P"?"#28425a":"#1d3544",stroke:selected===key(e)?"#f7d17b":"#7497b5","stroke-width":selected===key(e)?3:1}));
-  g.append(el("circle",{r:4,fill:"#d9e8f7"}));
-  if(e.sort==="P"){for(const [x,t] of [[-48,"B"],[48,"E"]]){g.append(el("circle",{cx:x,r:4,fill:t==="B"?"#e0b56a":"#76bbeb"}));g.append(el("text",{x:x*.75,y:4,fill:"#edf4fb","font-size":10,"text-anchor":"middle"},t));}}
-  const label=e.sort==="P"?String(e.r.label.value):e.r.kind+(Object.hasOwn(e.r,"payload")?": "+json(e.r.payload):"");
+  const p=pos.get(key(e)), k=key(e),g=el("g",{transform:`translate(${p.x} ${p.y})`,tabindex:0,role:"button","aria-label":k,"data-identity":k});
+  g.append(el("rect",{x:-48,y:-17,width:96,height:34,rx:e.sort==="P"?10:17,fill:e.sort==="P"?"#28425a":"#1d3544",stroke:selected===k?"#f7d17b":"#7497b5","stroke-width":selected===k?3:1}));
+  g.append(el("circle",{r:8,fill:"#d9e8f7","data-anchor":k}));
+  if(e.sort==="P"){for(const [x,t] of [[-48,"B"],[48,"E"]]){g.append(el("circle",{cx:x,r:8,fill:t==="B"?"#e0b56a":"#76bbeb","data-socket":t}));g.append(el("text",{x:x*.75,y:4,fill:"#edf4fb","font-size":10,"text-anchor":"middle"},t));}}
+  const label=e.sort==="P"?(e.r.label.kind==="role"?e.id:String(e.r.label.value)):e.r.kind+(Object.hasOwn(e.r,"payload")?": "+json(e.r.payload):"");
   g.append(el("text",{y:-23,"text-anchor":"middle",fill:"#d4e6f7","font-size":11},label.slice(0,24)));
-  g.append(el("title",{},key(e)+" "+label));
-  const choose=()=>{selected=key(e);render()};
-  g.addEventListener("click",choose);g.addEventListener("keydown",ev=>{if(ev.key==="Enter")choose()});
+  const rs=Object.keys(roles).filter(r=>e.sort==="P"&&roles[r]===e.id);
+  if(rs.length)g.append(el("text",{y:31,"text-anchor":"middle",fill:"#9ee5ba","font-size":11},rs.join("=")));
+  g.append(el("title",{},k+" "+label));
+  g.addEventListener("keydown",ev=>{if(ev.key==="Enter")choose(k)});
   svg.append(g);
  }
 }
 function render(){
- const p=session.visible, state=p.state;
+ const p=view??session.visible,state=p.state,events=session.running?session.tentative.map(x=>x.event):session.branch?.events??[];
+ const active=events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
- $("source").disabled=session.running;
- for(const id of ["apply","discard","inspect","reflect","example"])$(id).disabled=session.running;
- $("run").disabled=$("step").disabled=!version||session.dirty;
- $("inspect").disabled=session.running||session.dirty;
+ source.disabled=session.running;source.placeholder=session.projectionDiagnostic??"";
+ $("projection-note").textContent=session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":"Выбор ключа → отношение; выбор значения → payload";
+ for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
+ $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
+ $("inspect").disabled=session.running||session.dirty||!session.executable;
  let predicate=false;try{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;predicate=c==="is_string"||c==="is_null"}catch{}
- $("reflect").disabled=session.running||session.dirty||!predicate;
- network(p);const record=selected?([...state.mo.nodes].find(([id])=>"N:"+id===selected)??[...state.mo.relations].find(([id])=>"P:"+id===selected)):null;
- $("selection").textContent=record?json(record):"Выберите идентичность";
- const events=session.running?session.tentative.map(x=>x.event):session.branch?.events??[];
- const active=events.find(x=>x.frame===frame)??events.at(-1);
- const f=state.frames.get(active?.frame??session.inspection?.frame);
+ $("reflect").disabled=session.running||session.dirty||!session.executable||!predicate;
+ network(p,f?.roles);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
+ $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";
  $("result").textContent=session.branch?json(session.branch.result):session.running?"Предварительное осуществление":"—";
  $("exact").textContent=session.lossless();
+ $("occurrences").replaceChildren();$("result-occurrences").replaceChildren();
+ if(ep&&!session.dirty&&session.appliedText!==null){for(const x of rangesForIdentity(session.applied,session.appliedText,ep)){const b=document.createElement("button");b.textContent=json(x.path);b.onclick=()=>source.setSelectionRange(x.start,x.end);$("occurrences").append(b)}}
+ if(ep&&session.branch){const v=projectionOccurrences(session.branch.program.state.mo,session.branch.resultEndpoint,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=locateVPath(session.branch.program.state.mo,session.branch.resultEndpoint,path);if(q.ok)choose(key(q.node))};$("result-occurrences").append(b)}}
  $("timeline").replaceChildren();
- for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;selected="P:"+e.runtimeRSlot;render()};$("timeline").append(b)}
- for(const h of history){const s=document.createElement("span");s.textContent=h;$("timeline").append(s)}
+ for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json(e);render()};$("timeline").append(b)}
+ for(const [i,run] of session.runs.entries()){const b=document.createElement("button");b.textContent="Run "+(i+1)+": "+json(run.result);b.onclick=()=>{view=run.program;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json(run.events);render()};$("timeline").append(b)}
+ for(const e of session.edits){const b=document.createElement("button");b.textContent=e.kind==="Q"?"Q: reflection":e.action.op;b.onclick=()=>{$("transition-detail").textContent=json(e)};$("timeline").append(b)}
 }
 function act(fn){try{fn();render()}catch(e){render();$("status").textContent=e.message}}
-for(const [name,text] of Object.entries(examples)){const o=document.createElement("option");o.value=name;o.textContent=name;$("example").append(o)}
-$("example").value="where";source.value=session.draft;
-$("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросить черновик?"))return;session=createUnifiedSession(examples[$("example").value]);source.value=session.draft;selected=frame=null;history=[]});
+function clearView(){view=null;frame=null}
+function syncText(){source.value=session.draft??""}
+svg.addEventListener("pointerdown",ev=>{if(ev.button!==0)return;const g=ev.target.closest("[data-identity]");if(!g)return;const k=g.dataset.identity,p=coord(ev),side=ev.target.dataset.socket;gesture={k,side,start:p,base:session.layout.get(k)??{x:g.transform.baseVal.getItem(0).matrix.e,y:g.transform.baseVal.getItem(0).matrix.f}};svg.setPointerCapture(ev.pointerId);ev.preventDefault()});
+svg.addEventListener("pointermove",ev=>{if(!gesture)return;const p=coord(ev);if(Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<5&&!gesture.moved)return;gesture.moved=true;if(gesture.side){gesture.line?.remove();gesture.line=el("line",{x1:gesture.start.x,y1:gesture.start.y,x2:p.x,y2:p.y,stroke:"#f7d17b","stroke-width":2,"pointer-events":"none"});svg.append(gesture.line)}else{session.layout.set(gesture.k,{x:Math.max(50,gesture.base.x+p.x-gesture.start.x),y:Math.max(30,gesture.base.y+p.y-gesture.start.y)});render()}});
+svg.addEventListener("pointerup",ev=>{if(!gesture)return;const g=gesture;gesture=null;g.line?.remove();if(!g.moved){choose(g.k);return}if(!g.side)return;const target=document.elementFromPoint(ev.clientX,ev.clientY)?.closest("[data-anchor]")?.dataset.anchor;if(!target)return;act(()=>{if(view||session.running||session.dirty)throw Error("Edit only applied model; reset or apply first");const a=endpoint(g.k),b=endpoint(target);if(!session.applied.state.mo.relations.has(a.id)||!(b.sort==="P"?session.applied.state.mo.relations:session.applied.state.mo.nodes).has(b.id))throw Error("Runtime-only identity cannot edit applied model");const r=session.applied.state.mo.relations.get(a.id);if(!confirm(g.side+": "+key(r[g.side==="B"?"owner":"target"]??a)+" → "+target))return;const t=session.endpoint(a.id,g.side,b);if(t.outcome.status==="OK"){syncText();clearView();selected=g.k}})});
+svg.addEventListener("pointercancel",()=>{gesture?.line?.remove();gesture=null;render()});
+for(const name of Object.keys(examples)){const o=document.createElement("option");o.value=name;o.textContent=name;$("example").append(o)}
+$("example").value="where";syncText();
+let example="where";
+$("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросить черновик?")){$("example").value=example;return}example=$("example").value;session=examples[example]===null?createUnifiedSession(null,{model:mathematicalExample(example)}):createUnifiedSession(examples[example]);syncText();selected=null;clearView()});
 source.oninput=()=>act(()=>session.edit(source.value));
-$("apply").onclick=()=>act(()=>{if(session.apply()){selected=frame=null;history=[]}});
-$("discard").onclick=()=>act(()=>{session.discard();source.value=session.draft});
-$("reset").onclick=()=>act(()=>{session.reset();frame=null});
-$("inspect").onclick=()=>act(()=>session.inspect());
+source.addEventListener("click",()=>{if(!session.dirty&&session.appliedText!==null){const e=sourceIdentityAt(session.applied,session.appliedText,source.selectionStart);if(e)choose(key(e),false)}});
+$("apply").onclick=()=>act(()=>{if(session.apply()){selected=null;clearView()}});
+$("discard").onclick=()=>act(()=>{session.discard();syncText()});
+$("reset").onclick=()=>act(()=>{session.reset();clearView()});
+$("layout-reset").onclick=()=>act(()=>session.layout.clear());
+$("inspect").onclick=()=>act(()=>{clearView();session.inspect()});
 const env=()=>({version,meta:{engine:"html_rvm",slice:"J1"}});
-$("step").onclick=()=>act(()=>session.step(env()));
-$("run").onclick=()=>act(()=>session.run(env()));
-$("reflect").onclick=()=>act(()=>{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;const before=session.branch?.result;const e=session.reflect(["$sub"],"R",c==="is_string"?"is_null":"is_string");history.push("Q: "+c+" → "+inspectNaturalEntity(session.applied,["$sub"]).controller+(before===undefined?"":" · прежний результат "+json(before)));source.value=session.draft;selected="P:"+e.sourceSlot.id;frame=null});
+$("step").onclick=()=>act(()=>{clearView();session.step(env())});
+$("run").onclick=()=>act(()=>{clearView();session.run(env())});
+$("reflect").onclick=()=>act(()=>{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;const e=session.reflect(["$sub"],"R",c==="is_string"?"is_null":"is_string");syncText();selected="P:"+e.sourceSlot.id;clearView()});
+$("export-exact").onclick=()=>{const u=URL.createObjectURL(new Blob([session.lossless()],{type:"application/json"}));const a=document.createElement("a");a.href=u;a.download="mo-exact.json";a.click();URL.revokeObjectURL(u)};
+$("import-exact").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session;try{const text=await file.text();if(owner!==session)return;act(()=>{if(session.importExact(text)){syncText();selected=null;clearView()}})}finally{e.target.value=""}};
 render();
 fetch("./build-info.json").then(r=>{if(!r.ok)throw Error("build metadata");return r.json()}).then(m=>{if(!/^[0-9]{2}\.[0-9]{2}$/.test(m.version))throw Error("invalid version");version=m.version;$("version").textContent=version;render()}).catch(()=>{$("version").textContent="Нет build-info · Run/Step недоступны"});

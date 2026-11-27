@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createUnifiedSession,examples} from "../site/unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity} from "../site/unified-session.js";
 import {stepNaturalJSON,executeNaturalJSON,subjectivateNaturalJSON,inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {serializeE1State,deserializeE1State,frameRoleSlot} from "../research/pc1/e1-witness.mjs";
 const env={version:"01.77",meta:{engine:"test"}};
@@ -38,4 +38,40 @@ test("draft invalid, stop, reflection and state-only replay",()=>{
  assert.equal(inspectNaturalEntity(s.applied,["$sub"]).sourceSlots.R.id,old);
  assert.deepEqual(executeNaturalJSON({state:deserializeE1State(s.lossless())},env).result,[null]);
  assert.deepEqual(s.run(env).result,[null]);
+});
+
+test("source key and payload identities, escaped keys, repeated shared paths",()=>{
+ const text='{"a":1,"b":2,"x\\u002fy":3}';
+ const s=createUnifiedSession(text);
+ const a=sourceIdentityAt(s.applied,text,text.indexOf('"a"'));
+ const n=sourceIdentityAt(s.applied,text,text.indexOf("1"));
+ assert.equal(a.sort,"P");assert.equal(n.sort,"N");
+ const b=sourceIdentityAt(s.applied,text,text.indexOf('"b"'));
+ assert.equal(s.endpoint(b.id,"E",n).outcome.status,"OK");
+ assert.equal(rangesForIdentity(s.applied,s.appliedText,n).length,2);
+ assert.deepEqual(JSON.parse(s.appliedText),{a:1,b:1,"x/y":3});
+ assert.equal(sourceRanges(text).at(-1).path[0],"x/y");
+ s.edit('{"a":1,"a":2}');assert.equal(s.apply(),false);
+});
+test("relation-to-relation editing, cycles, layout orthogonality, exact import",()=>{
+ const s=createUnifiedSession(null,{model:mathematicalExample("ent_abc")});
+ assert.equal(s.executable,false);assert.equal(s.applied.state.mo.relations.get("r2").owner.id,"s1");
+ const exact=s.lossless();s.layout.set("P:r2",{x:10,y:20});assert.equal(s.lossless(),exact);
+ assert.equal(s.endpoint("r2","E",{sort:"P",id:"r2"}).outcome.status,"OK");
+ assert.equal(s.applied.state.mo.relations.get("r2").target.id,"r2");
+ assert.equal(s.appliedText,null);
+ const before=s.lossless();assert.equal(s.endpoint("r2","B",{sort:"P",id:"absent"}).outcome.status,"REJECT");assert.equal(s.lossless(),before);
+ const other=createUnifiedSession();assert.equal(other.importExact(before),true);assert.equal(other.lossless(),before);
+ const c=mathematicalExample("sharing + cycles").state.mo;
+ assert.equal(c.relations.get("self").target.id,"self");
+ assert.equal(c.relations.get("shared").owner.id,"mutual");
+ assert.equal(c.relations.get("mutual").target.id,"shared");
+ assert.deepEqual(c.relations.get("s1"),c.relations.get("s2"));
+});
+test("where result payload has original input identity and run history survives Q",()=>{
+ const s=createUnifiedSession();const run=s.run(env);
+ const src=sourceIdentityAt(s.applied,s.appliedText,s.appliedText.indexOf('"4"'));
+ const item=[...run.program.state.mo.relations.values()].find(r=>r.owner.id===run.resultEndpoint.id&&r.label.value===0);
+ assert.deepEqual(item.target,src);s.reflect(["$sub"],"R","is_null");
+ assert.deepEqual(s.runs[0].result,["4"]);assert.deepEqual(s.run(env).result,[null]);
 });
