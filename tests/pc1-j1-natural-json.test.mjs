@@ -21,19 +21,25 @@ const ENV = Object.freeze({
   meta: { engine: "html_rvm", slice: "J1" }
 });
 
-const HISTORICAL_VERSION = {
-  "$rel/rmvm_version": "rmvm/version",
-  "$rel/meta": "json/meta"
-};
+// Exact textual fixtures from netkeep80/jsonRVM@9d5f2000.../modules/console/test.
+const HISTORICAL_VERSION_SOURCE = `{
+  "$rel/rmvm_version" : "rmvm/version",
+  "$rel/meta" : "json/meta"
+}
+`;
 
-const HISTORICAL_WHERE = {
-  $obj: [null, 2, false, "4", {}],
-  $rel: "where",
-  $sub: {
-    $obj: { $ref: "$obj" },
-    $rel: "is_string"
-  }
-};
+const HISTORICAL_WHERE_SOURCE = `{
+   "$obj" : [ null, 2, false, "4", {} ],
+   "$rel" : "where",
+   "$sub" : {
+      "$obj" : {"$ref":"$obj"},
+      "$rel" : "is_string"
+   }
+}
+`;
+
+const HISTORICAL_VERSION = JSON.parse(HISTORICAL_VERSION_SOURCE);
+const HISTORICAL_WHERE = JSON.parse(HISTORICAL_WHERE_SOURCE);
 
 function slotValue(program, slot) {
   const relation = program.state.mo.relations.get(slot.id);
