@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-PC2-A2-001
+normative: "### HRVM-MO-PC2-A2-001 — Исследовательский PC2-A2 EXEC-профиль MUST расширять accepted PC2-A1 одним общим исполнительным трактом без второго интерпретатора: default A1 DATA/NO_CONTROLLER semantics MUST remain unchanged; explicit A2 EXEC MUST различать literal operand/data strings и executable control strings, использовать primitive-first address resolution в фактическом execution frame, сохранять accepted H/V reference timing и один attempt-shared monotonic execution budget, включая H probes. Bounded where/foreachobj MUST использовать actual typed P/N identities, historical item frame laws, fresh result occurrences, strict boolean where selection и value-copy selected outputs; mutation authority MUST определяться allocation provenance, а не lexical reachability, и MUST reject writes to pre-existing input/model/foreign/prior-item structures, cold host effects, nested iterator first-slice effects and unproved multi-H effects with exact whole-attempt rollback. COPY, ALIAS and VIEW MUST remain observably distinct by P/target identity and sharing semantics. Executable witnesses MUST include filter→patch→filter with same source/model/controller P identities, actual two-item historical PrepareFullReport inner construction/invocation, re-execution of the same model P after descendant patch, ownership negatives and conservative H rejection. A2 MUST NOT choose final Natural JSON carrier/grammar, claim unrestricted historical parity, general H independence or PC3/PC4 completion."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-PC2-A1-001 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "research/pc2/a1-contextual-json.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/pc2-a2-reflection.test.mjs" }
