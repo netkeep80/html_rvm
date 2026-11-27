@@ -335,10 +335,17 @@ function stageLoadNamespace(tx, name) {
 
 function resolveWithLoad(tx, frameId, address) {
   const parsed = parseAddress(address);
-  if (parsed.kind === "global") stageLoadNamespace(tx, parsed.name);
-  const resolved = resolveParsedExisting(tx, frameId, parsed);
-  record(tx, { op: "resolve", frame: frameId, address, slot: resolved.slot.id, readSlots: resolved.readSlots });
-  return resolved;
+  try {
+    if (parsed.kind === "global") stageLoadNamespace(tx, parsed.name);
+    const resolved = resolveParsedExisting(tx, frameId, parsed);
+    record(tx, { op: "resolve", frame: frameId, address, slot: resolved.slot.id, readSlots: resolved.readSlots, status: "OK" });
+    return resolved;
+  } catch (error) {
+    if (error?.diagnostic) {
+      record(tx, { op: "resolve", frame: frameId, address, status: "REJECT", diagnostic: error.diagnostic });
+    }
+    throw error;
+  }
 }
 
 function createNullMember(tx, owner, label) {
