@@ -149,6 +149,29 @@ try{
  await set("example","ORS 000","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='DATA'"),"DATA explicit mode");
  await set("example","ORS 100","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='NO_CONTROLLER'"),"NO_CONTROLLER explicit mode");
  await set("example","where","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='CALL'"),"CALL explicit mode");
+
+ // The selected member relation P must remain P after result occurrence navigation.
+ await set("example","ORS 000","change");await clickId("run");await selectSource('"a"');
+ const member=await evalv("JSON.parse(document.getElementById('selection').textContent).identity");
+ check(member.sort==="P"&&await evalv("document.querySelectorAll('#result-occurrences button').length===1"),"result member P has occurrence");
+ await clickPoint(await pos("#result-occurrences button"));
+ check(JSON.stringify(await evalv("JSON.parse(document.getElementById('selection').textContent).identity"))===JSON.stringify(member),"result navigation preserves P identity");
+ // Generate the exact counterexample with the session API; exercise import, Run, selection and warnings via actual UI.
+ const shared=await evalv(`(async()=>{
+  const {createUnifiedSession}=await import("/site/unified-session.js");
+  const s=createUnifiedSession(JSON.stringify(Array.from({length:257},(_,i)=>i)));
+  const root=s.applied.state.mo.roots[0],m=[...s.applied.state.mo.relations].filter(([,r])=>r.owner.id===root.id&&r.label.kind==="index");
+  if(s.atomic(m.slice(1).map(([id])=>({op:"rebindRelation",id,target:m[0][1].target}))).outcome.status!=="OK")throw Error("fixture");
+  return s.lossless()
+ })()`);
+ const sharedFile=join(tmp,"shared.json");await writeFile(sharedFile,shared);
+ await clickId("reset");await evalv("document.getElementById('exact-details').open=true;true");await upload("import-exact",sharedFile);
+ for(let i=0;i<100;i++){if((await exact())===shared)break;await sleep(25)}
+ check((await exact())===shared,"257 occurrence fixture exact import");
+ await clickId("run");await selectSource("0");
+ check(await evalv("document.querySelectorAll('#occurrences button').length===256&&!!document.querySelector('#occurrences .occurrence-warning')&&document.querySelectorAll('#result-occurrences button').length===256&&!!document.querySelector('#result-occurrences .occurrence-warning')"),"both occurrence lists explicitly disclose truncation");
+ check(await evalv("document.querySelectorAll('#incoming button').length===257"),"all incoming attachments exposed");
+ await set("example","where","change");await clickId("run");
  await send("Emulation.setDeviceMetricsOverride",{width:620,height:900,deviceScaleFactor:1,mobile:false});await frame();
  await clickPoint(await pos('[data-tab-button="network"]'));
  check(await evalv("getComputedStyle(document.querySelector('[data-panel=network]')).display!=='none'&&getComputedStyle(document.querySelector('[data-panel=source]')).display==='none'"),"narrow viewport uses shared tabs");
