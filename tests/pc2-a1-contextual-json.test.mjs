@@ -317,6 +317,187 @@ test("PC2-A1 W4 — source root is coherent and same-P COPY is a pre-projection 
   assert.ok(copied.committedTrace.some(event => event.op === "copy" && event.status === "NOOP_SAME_P"));
 });
 
+
+test("PC2-A1 audit P2-01 — nested H write cannot invalidate a prepared sibling read in either direction", () => {
+  const leftWrites = {
+    $rel: [
+      { "$rel/p": 7 },
+      {
+        "$rel/a": { $obj: 9, $rel: "=", $sub: { $ref: "$$rel/p" } },
+        "$rel/b": { $ref: "$rel/p" }
+      }
+    ]
+  };
+  const leftSession = createPC2A1Session(leftWrites);
+  const leftBefore = snapshotPC2A1Session(leftSession);
+  const left = executePC2A1(leftSession);
+  assert.equal(left.diagnostic, "H_READ_WRITE_CONFLICT");
+  assert.equal(snapshotPC2A1Session(left.session), leftBefore);
+  assert.deepEqual(left.committedTrace, []);
+
+  const rightWrites = {
+    $rel: [
+      { "$rel/p": 7 },
+      {
+        "$rel/a": { $ref: "$rel/p" },
+        "$rel/b": { $obj: 9, $rel: "=", $sub: { $ref: "$$rel/p" } }
+      }
+    ]
+  };
+  const rightSession = createPC2A1Session(rightWrites);
+  const rightBefore = snapshotPC2A1Session(rightSession);
+  const right = executePC2A1(rightSession);
+  assert.equal(right.diagnostic, "H_READ_WRITE_CONFLICT");
+  assert.equal(snapshotPC2A1Session(right.session), rightBefore);
+  assert.deepEqual(right.committedTrace, []);
+
+  const dynamicNested = executePC2A1(createPC2A1Session({
+    $rel: [
+      { "$rel/p": null },
+      {
+        "$rel/a": { $obj: 9, $rel: "=", $sub: { $ref: "$$rel/p/x" } },
+        "$rel/b": 1
+      }
+    ]
+  }));
+  assert.equal(dynamicNested.diagnostic, "H_UNPROVEN_INTERFERENCE");
+  assert.deepEqual(dynamicNested.committedTrace, []);
+});
+
+test("PC2-A1 audit P2-02 — controller rvalue resolves before S materialization", () => {
+  const source = {
+    $rel: {
+      $rel: { $ref: "$rel/x" },
+      $sub: { $ref: "$rel/x" }
+    }
+  };
+  const session = createPC2A1Session(source);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A1(session);
+  assert.equal(run.diagnostic, "MISSING_CONTEXT_PATH");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+  assert.ok(run.attemptedTrace.some(event =>
+    event.op === "resolve" &&
+    event.address === "$rel/x" &&
+    event.status === "REJECT" &&
+    event.diagnostic === "MISSING_CONTEXT_PATH"));
+  assert.equal(run.attemptedTrace.some(event => event.op === "lvalue-member"), false);
+});
+
+test("PC2-A1 audit P2-03 — add_entity reserves a fresh deterministic name across registry and cache", () => {
+  const source = {
+    $obj: { id: "new" },
+    $rel: "add_entity",
+    $sub: { $ref: "$rel/name" }
+  };
+
+  const registrySession = createPC2A1Session(source, {
+    registry: { "pc2-ent-1": { id: "existing" } }
+  });
+  const registryRun = executePC2A1(registrySession);
+  assert.equal(registryRun.diagnostic, null);
+  assert.equal(registryRun.result.name, "pc2-ent-2");
+  assert.deepEqual(registryRun.session.registry.get("pc2-ent-1"), { id: "existing" });
+  assert.deepEqual(registryRun.session.registry.get("pc2-ent-2"), { id: "new" });
+  assert.equal(registryRun.session.host.nextEntity, 3);
+
+  const cacheSession = createPC2A1Session(source);
+  cacheSession.namespace.set("pc2-ent-1", PC2_A1_ROOT_SOURCE_SLOT);
+  const cacheRun = executePC2A1(cacheSession);
+  assert.equal(cacheRun.diagnostic, null);
+  assert.equal(cacheRun.result.name, "pc2-ent-2");
+  assert.equal(cacheRun.session.namespace.get("pc2-ent-1"), PC2_A1_ROOT_SOURCE_SLOT);
+
+  const rollbackSource = {
+    $rel: [
+      { $obj: { id: "new" }, $rel: "add_entity", $sub: { $ref: "$rel/name" } },
+      { $obj: 7, $rel: "=", $sub: { $ref: "$ent" } }
+    ]
+  };
+  const rollbackSession = createPC2A1Session(rollbackSource, {
+    registry: { "pc2-ent-1": { id: "existing" } }
+  });
+  const rollbackBefore = snapshotPC2A1Session(rollbackSession);
+  const rollbackRun = executePC2A1(rollbackSession);
+  assert.equal(rollbackRun.diagnostic, "PROTECTED_SOURCE_ROOT");
+  assert.equal(snapshotPC2A1Session(rollbackRun.session), rollbackBefore);
+  assert.deepEqual(rollbackRun.committedTrace, []);
+  assert.ok(rollbackRun.attemptedTrace.some(event => event.op === "host.add" && event.name === "pc2-ent-2"));
+});
+
+test("PC2-A1 audit P2-04 — recursive references reject deterministically while finite chains execute", () => {
+  const selfSession = createPC2A1Session(
+    { $rel: { $ref: "a" } },
+    { registry: { a: { $ref: "a" } } }
+  );
+  const selfBefore = snapshotPC2A1Session(selfSession);
+  const self = executePC2A1(selfSession);
+  assert.equal(self.diagnostic, "EXECUTION_FUEL_EXHAUSTED");
+  assert.equal(snapshotPC2A1Session(self.session), selfBefore);
+  assert.deepEqual(self.committedTrace, []);
+  assert.ok(self.attemptedTrace.some(event => event.op === "execution-fuel"));
+
+  const mutualSession = createPC2A1Session(
+    { $rel: { $ref: "a" } },
+    { registry: { a: { $ref: "b" }, b: { $ref: "a" } } }
+  );
+  const mutualBefore = snapshotPC2A1Session(mutualSession);
+  const mutual = executePC2A1(mutualSession);
+  assert.equal(mutual.diagnostic, "EXECUTION_FUEL_EXHAUSTED");
+  assert.equal(snapshotPC2A1Session(mutual.session), mutualBefore);
+  assert.deepEqual(mutual.committedTrace, []);
+
+  const registry = {};
+  const depth = 24;
+  for (let i = 1; i < depth; i += 1) registry[\`a\${i}\`] = { $ref: \`a\${i + 1}\` };
+  registry[\`a\${depth}\`] = 7;
+  const finite = executePC2A1(createPC2A1Session(
+    { $rel: { $ref: "a1" } },
+    { registry }
+  ));
+  assert.equal(finite.diagnostic, null);
+  assert.equal(finite.result, 7);
+});
+
+test("PC2-A1 audit P2-05 — zero-segment resolution and COPY require typed live bound P identities", () => {
+  let session = makePlanSession();
+  let state = session.state;
+  const root = state.mo.roots[0];
+  state = applyMO(state, [
+    { op: "createRelation", id: "probe:unbound", owner: root, label: Role("unbound"), target: null }
+  ]);
+  session = { ...session, state };
+
+  const context = {
+    state,
+    namespace: new Map([
+      ["unbound", "probe:unbound"],
+      ["missing", "probe:missing"]
+    ])
+  };
+  assert.throws(
+    () => resolveExistingPC2A1(context, "probe:C", "unbound"),
+    error => error?.diagnostic === "UNBOUND_SLOT"
+  );
+  assert.throws(
+    () => resolveExistingPC2A1(context, "probe:C", "missing"),
+    error => error?.diagnostic === "MISSING_SLOT"
+  );
+
+  const missingCopy = copyPC2A1Slots(session, P("probe:absent"), P("probe:absent"));
+  assert.equal(missingCopy.diagnostic, "MISSING_SLOT");
+  assert.deepEqual(missingCopy.committedTrace, []);
+
+  const unboundCopy = copyPC2A1Slots(session, P("probe:unbound"), P("probe:unbound"));
+  assert.equal(unboundCopy.diagnostic, "UNBOUND_SLOT");
+  assert.deepEqual(unboundCopy.committedTrace, []);
+
+  const wrongSort = copyPC2A1Slots(session, N("probe:null"), N("probe:null"));
+  assert.equal(wrongSort.diagnostic, "INVALID_SLOT");
+  assert.deepEqual(wrongSort.committedTrace, []);
+});
+
 test("PC2-A1 historical absolute addressing — all 3 native CHECK observations and dynamic copied invocation", () => {
   const source = JSON.parse(HISTORICAL_ABSOLUTE_SOURCE);
   const session = createPC2A1Session(source, {

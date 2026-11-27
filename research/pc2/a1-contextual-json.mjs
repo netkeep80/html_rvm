@@ -23,6 +23,7 @@ export const PC2_A1_ROOT_SOURCE_SLOT = "j1:source-root";
 const ROLE_KEY = Object.freeze({ O: "$obj", R: "$rel", S: "$sub" });
 const ROLE_NAME = Object.freeze({ ent: "E", obj: "O", rel: "R", sub: "S" });
 const ADMITTED_PRIMITIVES = new Set(["=", "add_entity"]);
+const DEFAULT_EXECUTION_FUEL = 512;
 
 export class PC2A1Reject extends Error {
   constructor(diagnostic, message = diagnostic) {
@@ -72,7 +73,11 @@ function committedSession(tx) {
 }
 
 function beginTransaction(session) {
-  return { ...cloneSession(session), attemptedTrace: [] };
+  return { ...cloneSession(session), attemptedTrace: [], executionFuel: DEFAULT_EXECUTION_FUEL };
+}
+
+function beginProbeTransaction(tx) {
+  return { ...cloneSession(tx), attemptedTrace: [], executionFuel: tx.executionFuel };
 }
 
 function record(tx, event) {
@@ -258,17 +263,21 @@ function parseAddress(address) {
 }
 
 function rootSlotForParsed(context, frameId, parsed) {
+  let slot;
   if (parsed.kind === "global") {
     const id = context.namespace.get(parsed.name);
     if (!id) reject("GLOBAL_NOT_LOADED");
-    return P(id);
+    slot = P(id);
+  } else {
+    let frame = frameRecord(context.state, frameId);
+    for (let i = 0; i < parsed.depth; i += 1) {
+      if (frame.parent === null) reject("MISSING_PARENT_CONTEXT");
+      frame = frameRecord(context.state, frame.parent);
+    }
+    slot = P(frame.roles[parsed.role]);
   }
-  let frame = frameRecord(context.state, frameId);
-  for (let i = 0; i < parsed.depth; i += 1) {
-    if (frame.parent === null) reject("MISSING_PARENT_CONTEXT");
-    frame = frameRecord(context.state, frame.parent);
-  }
-  return P(frame.roles[parsed.role]);
+  requireRelation(context.state, slot);
+  return slot;
 }
 
 function labelForOwner(state, owner, segment) {
@@ -479,12 +488,21 @@ function writeScalarToR(tx, frameId, value) {
   record(tx, { op: "scalar", frame: frameId, R: slot.id, value });
 }
 
+function normalizePublicPSlot(value) {
+  if (typeof value === "string") return P(value);
+  if (!value || typeof value !== "object" || value.sort !== "P" || typeof value.id !== "string") {
+    reject("INVALID_SLOT");
+  }
+  return P(value.id);
+}
+
 function copySlots(tx, O, S, frameId = null) {
+  const source = requireRelation(tx.state, O);
+  requireRelation(tx.state, S);
   if (O.id === S.id) {
     record(tx, { op: "copy", frame: frameId, O: O.id, S: S.id, status: "NOOP_SAME_P" });
     return;
   }
-  const source = requireRelation(tx.state, O);
   let value;
   try {
     value = projectPlainJSON(tx.state.mo, source.target);
@@ -500,7 +518,9 @@ function copySlots(tx, O, S, frameId = null) {
 export function copyPC2A1Slots(session, O, S) {
   const tx = beginTransaction(session);
   try {
-    copySlots(tx, P(O.id ?? O), P(S.id ?? S));
+    const oSlot = normalizePublicPSlot(O);
+    const sSlot = normalizePublicPSlot(S);
+    copySlots(tx, oSlot, sSlot);
     return {
       session: committedSession(tx),
       diagnostic: null,
@@ -528,7 +548,12 @@ function primitiveAddEntity(tx, frameId) {
     if (error?.diagnostic) reject("ADD_ENTITY_NONPROJECTABLE");
     throw error;
   }
-  const name = `pc2-ent-${tx.host.nextEntity++}`;
+
+  let name;
+  do {
+    name = `pc2-ent-${tx.host.nextEntity++}`;
+  } while (tx.registry.has(name) || tx.namespace.has(name));
+
   tx.registry.set(name, cloneJSON(value));
   record(tx, { op: "host.add", name, frame: frameId, status: "STAGED" });
   const endpoint = appendJSON(tx, name, "add-entity-id");
@@ -572,10 +597,109 @@ function executePreparedBranch(tx, frameId, prepared) {
   return executeSlot(tx, frameId, prepared.slot);
 }
 
+function consumeExecutionFuel(tx, frameId, slot) {
+  if (!Number.isInteger(tx.executionFuel) || tx.executionFuel <= 0) {
+    record(tx, {
+      op: "execution-fuel",
+      frame: frameId,
+      slot: slot?.id ?? null,
+      remaining: 0,
+      status: "REJECT",
+      diagnostic: "EXECUTION_FUEL_EXHAUSTED"
+    });
+    reject("EXECUTION_FUEL_EXHAUSTED");
+  }
+  tx.executionFuel -= 1;
+}
+
+function footprintFromTrace(trace, preparedReads, baselineRelations) {
+  const reads = new Set(preparedReads);
+  const writes = new Set();
+  let unproven = false;
+
+  for (const event of trace) {
+    if (event.op === "resolve" && event.status === "OK") {
+      for (const id of event.readSlots ?? []) reads.add(id);
+    }
+    if (event.op === "exec-slot" && event.slot) reads.add(event.slot);
+    if (event.op === "copy" && event.O) reads.add(event.O);
+    if (event.op === "add_entity" && event.O) reads.add(event.O);
+
+    const actions = [];
+    if (event.action) actions.push(event.action);
+    if (Array.isArray(event.actions)) actions.push(...event.actions);
+    for (const action of actions) {
+      if (action?.op === "rebindRelation" || action?.op === "unbindRelation" || action?.op === "deleteRelation") {
+        if (baselineRelations.has(action.id)) writes.add(action.id);
+        else unproven = true;
+      }
+    }
+
+    if (event.op === "lvalue-member" ||
+        event.op === "lvalue-promote" ||
+        event.op === "lvalue-promote-rebind" ||
+        event.op === "host.add" ||
+        event.op === "host.load") {
+      unproven = true;
+    }
+  }
+
+  return { reads, writes, unproven };
+}
+
+function intersects(a, b) {
+  for (const value of a) if (b.has(value)) return true;
+  return false;
+}
+
+function preflightHBranch(tx, source, plan, prepared) {
+  const probe = beginProbeTransaction(tx);
+  const baselineRelations = new Set(probe.state.mo.relations.keys());
+  const h = createFrameTx(probe, {
+    E: source.roles.E,
+    O: source.roles.O,
+    R: plan.slot.id,
+    S: source.roles.S
+  }, source.parent, "H-preflight");
+
+  try {
+    executePreparedBranch(probe, h, prepared);
+  } catch (error) {
+    if (error?.diagnostic) {
+      record(tx, { op: "H-preflight", R: plan.slot.id, status: "REJECT", diagnostic: error.diagnostic });
+    }
+    throw error;
+  }
+
+  return footprintFromTrace(probe.attemptedTrace, prepared.reads ?? [], baselineRelations);
+}
+
+function validateHBranchIndependence(tx, source, plans, prepared) {
+  if (plans.length <= 1) return;
+
+  const footprints = plans.map((plan, index) => preflightHBranch(tx, source, plan, prepared[index]));
+  if (footprints.some(footprint => footprint.unproven)) {
+    reject("H_UNPROVEN_INTERFERENCE");
+  }
+
+  for (let i = 0; i < footprints.length; i += 1) {
+    for (let j = i + 1; j < footprints.length; j += 1) {
+      if (intersects(footprints[i].writes, footprints[j].writes)) {
+        reject("H_WRITE_WRITE_CONFLICT");
+      }
+      if (intersects(footprints[i].writes, footprints[j].reads) ||
+          intersects(footprints[j].writes, footprints[i].reads)) {
+        reject("H_READ_WRITE_CONFLICT");
+      }
+    }
+  }
+}
+
 function executeLambdaObject(tx, frameId, modelSlot) {
   const { members } = objectMembers(tx.state, modelSlot);
   const branches = [...members.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   if (branches.length === 0) return;
+
   const plans = planLValues(tx, frameId, branches.map(([key]) => key));
   const prepared = branches.map(([, slot]) => prepareBranchTerm(tx, frameId, slot));
   const destinations = new Set(plans.map(plan => plan.slot.id));
@@ -584,6 +708,8 @@ function executeLambdaObject(tx, frameId, modelSlot) {
   }
 
   const source = frameRecord(tx.state, frameId);
+  validateHBranchIndependence(tx, source, plans, prepared);
+
   for (let i = 0; i < branches.length; i += 1) {
     const [key, sourceSlot] = branches[i];
     const plan = plans[i];
@@ -618,10 +744,10 @@ function executeEntity(tx, callerFrame, modelSlot) {
   const O = members.has(ROLE_KEY.O)
     ? prepareRoleTerm(tx, callerFrame, members.get(ROLE_KEY.O), { lvalue: false }).slot
     : callerR;
+  const controller = prepareController(tx, callerFrame, controllerSlot);
   const S = members.has(ROLE_KEY.S)
     ? prepareRoleTerm(tx, callerFrame, members.get(ROLE_KEY.S), { lvalue: true }).slot
     : callerR;
-  const controller = prepareController(tx, callerFrame, controllerSlot);
 
   const child = createFrameTx(tx, {
     E: modelSlot.id,
@@ -646,7 +772,9 @@ function executeEntity(tx, callerFrame, modelSlot) {
 }
 
 function executeSlot(tx, frameId, slot) {
+  consumeExecutionFuel(tx, frameId, slot);
   const relation = requireRelation(tx.state, slot);
+  record(tx, { op: "exec-slot", frame: frameId, slot: slot.id });
   const endpoint = relation.target;
   if (endpoint.sort !== "N") reject("EXEC_ENDPOINT_NOT_JSON_NODE");
   const node = tx.state.mo.nodes.get(endpoint.id);
