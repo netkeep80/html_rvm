@@ -375,7 +375,7 @@ function requireEnvironment(environment) {
   return environment;
 }
 
-function invokePrimitive(program, inst, environment, events, options = {}) {
+function* invokePrimitive(program, inst, environment, events, options = {}) {
   const controller = inst.controller;
   if (!Object.hasOwn(PRIMITIVE_OUTPUT_ROLE, controller)) reject("UNKNOWN_CONTROLLER");
   environment = requireEnvironment(environment);
@@ -384,6 +384,7 @@ function invokePrimitive(program, inst, environment, events, options = {}) {
     const appended = appendJSON(program, environment.version);
     const written = writeFrameRole(appended.program, inst.frame, "R", appended.endpoint);
     events.push(resultEvent(written.program, inst, controller, "R", appended.endpoint, options));
+    yield { program: written.program, event: events.at(-1) };
     return { program: written.program, endpoint: appended.endpoint };
   }
 
@@ -391,6 +392,7 @@ function invokePrimitive(program, inst, environment, events, options = {}) {
     const appended = appendJSON(program, environment.meta);
     const written = writeFrameRole(appended.program, inst.frame, "R", appended.endpoint);
     events.push(resultEvent(written.program, inst, controller, "R", appended.endpoint, options));
+    yield { program: written.program, event: events.at(-1) };
     return { program: written.program, endpoint: appended.endpoint };
   }
 
@@ -401,6 +403,7 @@ function invokePrimitive(program, inst, environment, events, options = {}) {
     const appended = appendJSON(program, boolean);
     const written = writeFrameRole(appended.program, inst.frame, "S", appended.endpoint);
     events.push(resultEvent(written.program, inst, controller, "S", appended.endpoint, options));
+    yield { program: written.program, event: events.at(-1) };
     return { program: written.program, endpoint: appended.endpoint };
   }
 
@@ -436,7 +439,7 @@ function invokePrimitive(program, inst, environment, events, options = {}) {
         });
         current = child.program;
         if (!child.controller) reject("WHERE_PREDICATE_CONTROLLER_REQUIRED");
-        const invoked = invokePrimitive(current, child, environment, events, { iteration: index });
+        const invoked = yield* invokePrimitive(current, child, environment, events, { iteration: index });
         current = invoked.program;
         const boolValue = projectPlainJSON(current.state.mo, slotTarget(current, boolSlot.slot));
         if (boolValue === true) selected.push(itemRelation.target);
@@ -448,6 +451,7 @@ function invokePrimitive(program, inst, environment, events, options = {}) {
     const output = appendArrayByReference(current, selected);
     const written = writeFrameRole(output.program, inst.frame, "R", output.endpoint);
     events.push(resultEvent(written.program, inst, controller, "R", output.endpoint, options));
+    yield { program: written.program, event: events.at(-1) };
     return { program: written.program, endpoint: output.endpoint };
   }
 
@@ -468,7 +472,7 @@ function isBoundedLambdaObject(program, node) {
   return true;
 }
 
-function invokeLambdaObject(program, resolved, caller, environment, events) {
+function* invokeLambdaObject(program, resolved, caller, environment, events) {
   const lambda = instantiateResolvedEntity(program, resolved, caller);
   let current = lambda.program;
 
@@ -515,13 +519,13 @@ function invokeLambdaObject(program, resolved, caller, environment, events) {
         S: destination.slot
       }
     };
-    const invoked = invokePrimitive(current, inst, environment, events);
+    const invoked = yield* invokePrimitive(current, inst, environment, events);
     current = invoked.program;
   }
   return { program: current, endpoint: output.endpoint };
 }
 
-function executeBody(program, environment, events) {
+function* executeBody(program, environment, events) {
   const root = program.state.mo.roots[0];
   const node = program.state.mo.nodes.get(root.id);
   if (!node) reject("SOURCE_ROOT_MISSING");
@@ -543,13 +547,13 @@ function executeBody(program, environment, events) {
     const inst = instantiateResolvedEntity(current, resolved, caller);
     current = inst.program;
     if (!inst.controller) reject("NO_CONTROLLER");
-    const invoked = invokePrimitive(current, inst, environment, events);
+    const invoked = yield* invokePrimitive(current, inst, environment, events);
     current = invoked.program;
     return { program: current, endpoint: slotTarget(current, context.slot), mode: "CALL" };
   }
 
   if (isBoundedLambdaObject(current, root)) {
-    const invoked = invokeLambdaObject(current, resolved, caller, environment, events);
+    const invoked = yield* invokeLambdaObject(current, resolved, caller, environment, events);
     current = invoked.program;
     return { program: current, endpoint: slotTarget(current, context.slot), mode: "LAMBDA" };
   }
@@ -606,12 +610,12 @@ export function instantiateNaturalEntity(program, path = []) {
   };
 }
 
-export function executeNaturalJSON(program, environment) {
+export function* stepNaturalJSON(program, environment) {
   validateE1State(program.state);
   const start = program;
   const events = [];
   try {
-    const executed = executeBody(program, environment, events);
+    const executed = yield* executeBody(program, environment, events);
     return {
       program: executed.program,
       result: projectPlainJSON(executed.program.state.mo, executed.endpoint),
@@ -632,6 +636,14 @@ export function executeNaturalJSON(program, environment) {
       diagnostic
     };
   }
+}
+
+// Run and Step share the same execution path and whole-attempt rejection contract.
+export function executeNaturalJSON(program, environment) {
+  const execution = stepNaturalJSON(program, environment);
+  let next;
+  do { next = execution.next(); } while (!next.done);
+  return next.value;
 }
 
 export function reflectiveReplaceRole(program, path, role, value) {

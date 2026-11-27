@@ -11,7 +11,9 @@ const staticFiles = [
   "src/document-port-error.js", "src/strict-json.js",
   "src/memory-document-provider.js", "src/working-session.js",
   "site/mo-studio.html", "site/mo-studio.css", "site/mo-studio.js", "site/mo-studio-ui.js", "site/mo-visual-graph.js", "site/mo-projection-sync.js", "site/mo-transition-observer.js",
-  "src/mo-core.js", "src/mo-json.js", "src/mo-reference.js"
+  "src/mo-core.js", "src/mo-json.js", "src/mo-reference.js",
+  "site/unified-studio.html", "site/unified-studio.css", "site/unified-studio.js", "site/unified-session.js",
+  "research/pc1/j1-natural-json.mjs", "research/pc1/e1-witness.mjs"
 ];
 
 /** Create an inert static artifact; never run user-supplied JavaScript. */
