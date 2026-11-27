@@ -147,7 +147,7 @@ try{
  check((await exact())===savedB&&await evalv("document.getElementById('import-status').textContent.includes('read failed')"),"exact read rejection reported");
  await evalv("File.prototype.text=window.realText;true");
  await set("example","ORS 000","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='DATA'"),"DATA explicit mode");
- await set("example","ORS 100","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='NO_CONTROLLER'"),"NO_CONTROLLER explicit mode");
+ await set("example","ORS 100","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='REJECT · NO_CONTROLLER'"),"NO_CONTROLLER explicit rejection");
  await set("example","where","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='CALL'"),"CALL explicit mode");
 
  // The selected member relation P must remain P after result occurrence navigation.

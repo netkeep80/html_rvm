@@ -18,7 +18,7 @@ function highlightSource(){
  const x=sourceOccurrenceInfo(owner.program,owner.text,endpoint(selected)).ranges[0];
  if(x)owner.editor.setSelectionRange(x.start,x.end);
 }
-function currentRun(){return session.running?{sourceProgram:session.applied,sourceText:session.appliedText,snapshots:session.tentative,events:session.tentative.map(x=>x.event),mode:"CALL",tentative:true}:session.branch}
+function currentRun(){return session.running?{sourceProgram:session.applied,sourceText:session.appliedText,snapshots:session.tentative,events:session.tentative.map(x=>x.event),mode:"PENDING",tentative:true}:session.branch}
 function selectStep(run,index){
  creation=null;viewRun=run;const step=executionStepView(run,index);view=step.program;viewEvent=step.event;frame=step.event.frame;
  selected="P:"+(step.outputSlot??step.event.runtimeRSlot);
@@ -61,7 +61,7 @@ function render(){
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
  source.disabled=session.running||!!viewRun;source.placeholder=session.projectionDiagnostic??"";
  source.hidden=!!viewRun;historical.hidden=!viewRun;if(viewRun&&historical.value!==(viewRun.sourceText??""))historical.value=viewRun.sourceText??"";
- $("return-current").hidden=!viewRun;$("mode").textContent=ownerRun?.mode??(session.lastReject?.kind==="run"?"REJECT":"—");
+ $("return-current").hidden=!viewRun;$("mode").textContent=ownerRun?.mode??(session.lastReject?.kind==="run"?"REJECT · "+session.lastReject.diagnostic:"—");
  $("projection-note").textContent=viewRun?"Снимок исходной метапрограммы выбранного исполнения (read-only)":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":session.projectionPartial?"JSON — частичная проекция МО. Точная модель: Export exact.":"Выбор ключа → отношение; выбор значения → payload";
  for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
  $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
