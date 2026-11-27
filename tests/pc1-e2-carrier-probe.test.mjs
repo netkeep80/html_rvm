@@ -632,8 +632,8 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   const ad2=[{frame:a2.frame("HB"),target:a2.ref("two")},{frame:a2.frame("HA"),target:a2.ref("one")}];
   const ac1=a1.commitWrites(ad1), ac2=a2.commitWrites(ad2);
   const aCommute=a1.readDuplet("aSlot").end.id===a2.readDuplet("aSlot").end.id&&a1.readDuplet("bSlot").end.id===a2.readDuplet("bSlot").end.id;
-  const HRX=aa.a.H(aa.C0,"$rel/x","HRX"), HOX=aa.a.H(aa.C0,"$obj/x","HOX"), aBefore=aa.a.serializeLossless();
-  const aconf=aa.a.commitWrites([{frame:HRX,target:aa.one},{frame:HOX,target:aa.two}]);
+  const aHRX=aa.a.H(aa.C0,"$rel/x","HRX"), aHOX=aa.a.H(aa.C0,"$obj/x","HOX"), aBefore=aa.a.serializeLossless();
+  const aconf=aa.a.commitWrites([{frame:aHRX,target:aa.one},{frame:aHOX,target:aa.two}]);
   const aObs={classify:a1.classifyWrites(ad1).status,commute:aCommute,final:[a1.readDuplet("aSlot").end.id,a1.readDuplet("bSlot").end.id],conflict:aconf.status,unchanged:aa.a.serializeLossless()===aBefore};
 
   const makeC=()=>{
@@ -647,8 +647,8 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   const cd1=[{frame:cc.HA,target:cc.one},{frame:cc.HB,target:cc.two}], cd2=[{frame:cc.HB,target:cc.two},{frame:cc.HA,target:cc.one}];
   c1.commitWrites(cd1); c2.commitWrites(cd2);
   const cCommute=c1.roleValue(cc.HA,"R")===c2.roleValue(cc.HA,"R")&&c1.roleValue(cc.HB,"R")===c2.roleValue(cc.HB,"R");
-  const HRX=cc.c.H(cc.C0,"$rel/x"), HOX=cc.c.H(cc.C0,"$obj/x"), cBefore=cc.c.serializeLossless();
-  const cconf=cc.c.commitWrites([{frame:HRX,target:cc.one},{frame:HOX,target:cc.two}]);
+  const cHRX=cc.c.H(cc.C0,"$rel/x"), cHOX=cc.c.H(cc.C0,"$obj/x"), cBefore=cc.c.serializeLossless();
+  const cconf=cc.c.commitWrites([{frame:cHRX,target:cc.one},{frame:cHOX,target:cc.two}]);
   const cm=cNames({one:cc.one,two:cc.two});
   const cObs={classify:c1.classifyWrites(cd1).status,commute:cCommute,final:[cm(c1.read(cc.aSlot).end),cm(c1.read(cc.bSlot).end)],conflict:cconf.status,unchanged:cc.c.serializeLossless()===cBefore};
   assert.deepEqual(aObs,bObs);
