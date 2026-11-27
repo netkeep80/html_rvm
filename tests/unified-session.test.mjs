@@ -138,3 +138,15 @@ test("focused network is finite, endpoint-closed, and all identities remain avai
  const cycles=mathematicalExample("sharing + cycles");
  assert.equal(networkPresentation(cycles).records.length,cycles.state.mo.nodes.size+cycles.state.mo.relations.size);
 });
+
+test("distinct shared JSON member relations never occupy identical layout positions",()=>{
+ const s=createUnifiedSession('{"a":1,"b":2}');
+ const a=sourceIdentityAt(s.applied,s.appliedText,s.appliedText.indexOf("1"));
+ const b=sourceIdentityAt(s.applied,s.appliedText,s.appliedText.indexOf('"b"'));
+ s.endpoint(b.id,"E",a);
+ const v=networkPresentation(s.applied,{all:true});
+ const members=v.records.filter(e=>e.sort==="P"&&e.r.owner.id===s.applied.state.mo.roots[0].id&&e.r.label.kind==="key");
+ assert.equal(members.length,2);
+ const positions=members.map(e=>JSON.stringify(v.positions.get("P:"+e.id)));
+ assert.equal(new Set(positions).size,2);
+});

@@ -18,3 +18,7 @@ Public packaging: one UI at site/unified-studio.html; root and two historical en
 | PC1 executable/reflection | J1 version/where, ORS, Q, state-only replay | J1 and unified tests; copy/alias parity OPEN |
 
 No full industrial parity or compactness claim. Exact historical fixture comparison is bounded to accepted version/where. Visual walkthrough, independent audit, review of remaining UI coverage and explicit author merge authorization are required before publication. No old assets removed from Git; this migration changes the public package only.
+
+### Visual review delta
+
+Actual previous Chromium screenshots (artifact 15207251445, HEAD 427d17e…) showed excessive crossings in the all-records grid for Natural JSON where. The replacement default lays out structural member occurrences between owner and target, then places remaining visible identities on a shelf. The focused view is explicitly labelled and endpoint-closed, with a visible count and an all-identities switch. Layout is not semantic state; equal-but-distinct relation glyphs are never coalesced. General non-tree mathematical examples keep the finite grid and direct B/E attachments. Independent visual acceptance still required.
