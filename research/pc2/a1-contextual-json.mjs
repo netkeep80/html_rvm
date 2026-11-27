@@ -904,6 +904,14 @@ function primitiveWhere(tx, frameId) {
     previousP.push(outP.id);
     if (outRel.target.sort === "N") previousN.push(outRel.target.id);
   }
+  const resultRelation = readRelation(tx, prep.R);
+  record(tx, {
+    op: "iterator-exit",
+    kind: "where",
+    frame: frameId,
+    R: prep.R.id,
+    result: projectValue(tx, resultRelation.target)
+  });
 }
 
 function primitiveForeach(tx, frameId) {
@@ -935,6 +943,14 @@ function primitiveForeach(tx, frameId) {
     previousP.push(resultP.id);
     if (resultRelation.target.sort === "N") previousN.push(resultRelation.target.id);
   }
+  const outputRelation = readRelation(tx, prep.R);
+  record(tx, {
+    op: "iterator-exit",
+    kind: "foreachobj",
+    frame: frameId,
+    R: prep.R.id,
+    result: projectValue(tx, outputRelation.target)
+  });
 }
 
 function dispatchPrimitive(tx, frameId, name) {
