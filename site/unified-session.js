@@ -80,6 +80,57 @@ export async function readLocalJSON(text){
  const reader=new MemoryDocumentProvider({source:cloneStrictJSON(JSON.parse(text))});
  return readDocumentDraft(reader,await reader.openSnapshot(),"source");
 }
+// Pure display projection: relation identities are never merged or recursively expanded.
+const displayKey=e=>e.sort+":"+e.id;
+export function networkPresentation(program,{applied=null,roles={},sourceController=null,resultEndpoint=null,selected=null,all=false}={}){
+ const mo=program.state.mo,records=[...Array.from(mo.nodes,([id,r])=>({sort:"N",id,r})),...Array.from(mo.relations,([id,r])=>({sort:"P",id,r}))];
+ const index=new Map(records.map(e=>[displayKey(e),e]));
+ const root=mo.roots[0],treeLayout=root?.sort==="N"&&mo.relations.has("j1:source-root");
+ const keep=new Set();
+ const structural=new Map();
+ for(const e of records)if(e.sort==="P"&&["key","index"].includes(e.r.label.kind)&&e.r.owner.sort==="N"){
+   const id=e.r.owner.id;if(!structural.has(id))structural.set(id,[]);structural.get(id).push(e)
+ }
+ for(const list of structural.values())list.sort((a,b)=>typeof a.r.label.value==="number"&&typeof b.r.label.value==="number"?a.r.label.value-b.r.label.value:String(a.r.label.value).localeCompare(String(b.r.label.value)));
+ function add(e,subtree=false){
+  if(!e)return;const k=displayKey(e),r=index.get(k);if(!r||keep.has(k))return;keep.add(k);
+  if(r.sort==="P"){add(r.r.owner);add(r.r.target,subtree)}
+  else if(subtree)for(const p of structural.get(r.id)??[])add(p,true)
+ }
+ if(all||!treeLayout||program===applied){for(const e of records)keep.add(displayKey(e))}
+ else{
+  add(root,true);add(P("j1:source-root"));
+  if(applied){for(const [id] of applied.state.mo.nodes)add(N(id));for(const [id] of applied.state.mo.relations)add(P(id))}
+  for(const id of Object.values(roles))add(P(id),true);
+  if(sourceController)add(P(sourceController));
+  add(resultEndpoint,true);add(selected);
+ }
+ const shown=records.filter(e=>keep.has(displayKey(e))),positions=new Map();
+ let leaf=0,maxX=0;
+ if(treeLayout){
+  const active=new Set();
+  function put(e,x,y){positions.set(displayKey(e),{x,y});maxX=Math.max(maxX,x)}
+  function visit(e,depth){
+   const k=displayKey(e);if(!keep.has(k)||!index.has(k))return null;
+   if(positions.has(k))return positions.get(k).y;
+   if(active.has(k))return null;active.add(k);
+   const x=76+depth*136,children=e.sort==="N"?structural.get(e.id)??[]:[];
+   const ys=[];
+   for(const p of children){const pk=displayKey(p);if(!keep.has(pk)||positions.has(pk))continue;
+    const y0=p.r.target?.sort==="N"?visit(p.r.target,depth+2):null;
+    const y=y0??(49+leaf++*74);
+    put(p,76+(depth+1)*136,y);ys.push(y)
+   }
+   const y=ys.length?(ys[0]+ys.at(-1))/2:49+leaf++*74;
+   put(e,x,y);active.delete(k);return y;
+  }
+  visit(root,0);
+ }
+ const rest=shown.filter(e=>!positions.has(displayKey(e))),baseY=treeLayout?Math.max(120,49+leaf*74):45;
+ const cols=treeLayout?Math.max(4,Math.floor((maxX+100)/160)):4;
+ rest.forEach((e,i)=>positions.set(displayKey(e),{x:treeLayout?76+i%cols*160:95+i%cols*180,y:baseY+Math.floor(i/cols)*76}));
+ return {records:shown,positions,total:records.length,treeLayout};
+}
 export function createUnifiedSession(text = examples.where,{model=null}={}) {
  let applied=model??parseSource(text),appliedText=model?null:text,draft=appliedText;
  let branch=null,attempt=null,tentative=[],diagnostic=null,inspection=null,projectionDiagnostic=model?"MATHEMATICAL_EXAMPLE":null;

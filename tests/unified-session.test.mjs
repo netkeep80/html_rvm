@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity,readDocumentDraft,readLocalJSON} from "../site/unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity,readDocumentDraft,readLocalJSON,networkPresentation} from "../site/unified-session.js";
 import {stepNaturalJSON,executeNaturalJSON,subjectivateNaturalJSON,inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {serializeE1State,deserializeE1State,frameRoleSlot} from "../research/pc1/e1-witness.mjs";
 const env={version:"01.77",meta:{engine:"test"}};
@@ -122,4 +122,19 @@ test("projection remains marked partial after structural edit and exact import",
  assert.deepEqual(JSON.parse(s.exportSource()),{a:1});
  const other=createUnifiedSession();assert.equal(other.importExact(s.lossless()),true);
  assert.equal(other.projectionPartial,true);
+});
+
+test("focused network is finite, endpoint-closed, and all identities remain available",()=>{
+ const s=createUnifiedSession(),run=s.run(env),state=run.program.state;
+ const event=run.events.at(-1),frame=state.frames.get(event.frame),before=serializeE1State(state);
+ const focus=networkPresentation(run.program,{applied:s.applied,roles:frame.roles,resultEndpoint:run.resultEndpoint,sourceController:event.sourceControllerSlot});
+ const all=networkPresentation(run.program,{all:true});
+ assert.equal(all.records.length,state.mo.nodes.size+state.mo.relations.size);
+ assert.ok(focus.records.length<all.records.length);
+ const keys=new Set(focus.records.map(e=>e.sort+":"+e.id));
+ for(const e of focus.records.filter(x=>x.sort==="P"))for(const target of [e.r.owner,e.r.target])if(target)assert.ok(keys.has(target.sort+":"+target.id));
+ assert.equal(focus.positions.size,focus.records.length);
+ assert.equal(serializeE1State(state),before);
+ const cycles=mathematicalExample("sharing + cycles");
+ assert.equal(networkPresentation(cycles).records.length,cycles.state.mo.nodes.size+cycles.state.mo.relations.size);
 });

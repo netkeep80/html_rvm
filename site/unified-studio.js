@@ -1,4 +1,4 @@
-import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,rangesForIdentity,readLocalJSON} from "./unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,rangesForIdentity,readLocalJSON,networkPresentation} from "./unified-session.js";
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
@@ -16,12 +16,14 @@ function highlightSource(){
  const ranges=rangesForIdentity(session.applied,session.appliedText,endpoint(selected));
  if(ranges.length){const x=ranges[0];source.setSelectionRange(x.start,x.end)}
 }
-function network(program,roles={}){
- const mo=program.state.mo, records=[...Array.from(mo.nodes,([id,r])=>({sort:"N",id,r})),...Array.from(mo.relations,([id,r])=>({sort:"P",id,r}))];
- svg.replaceChildren();const cols=4,pos=new Map();
- records.forEach((e,i)=>pos.set(key(e),session.layout.get(key(e))??{x:95+i%cols*180,y:45+Math.floor(i/cols)*76}));
+function network(program,roles={},sourceController=null,resultEndpoint=null){
+ const plan=networkPresentation(program,{applied:view?null:session.applied,roles,sourceController,resultEndpoint,selected:selected?endpoint(selected):null,all:$("network-scope").value==="all"});
+ const records=plan.records,pos=new Map(plan.positions);
+ for(const e of records)if(session.layout.has(key(e)))pos.set(key(e),session.layout.get(key(e)));
+ svg.replaceChildren();$("network-count").textContent=records.length+" / "+plan.total+" идентичностей";
  const w=Math.max(760,...[...pos.values()].map(x=>x.x+70)),h=Math.max(420,...[...pos.values()].map(x=>x.y+55));
- svg.setAttribute("viewBox","0 0 "+w+" "+h);svg.setAttribute("width",w*zoom);svg.setAttribute("height",h*zoom);
+ const scale=plan.treeLayout?Math.min(1,svg.parentElement.clientWidth/w)*zoom:zoom;
+ svg.setAttribute("viewBox","0 0 "+w+" "+h);svg.setAttribute("width",w*scale);svg.setAttribute("height",h*scale);
  for(const e of records.filter(e=>e.sort==="P")){
   const p=pos.get(key(e));
   for(const [side,end] of [[-1,e.r.owner],[1,e.r.target]]){if(!end)continue;const q=pos.get(key(end));if(!q)continue;
@@ -34,7 +36,7 @@ function network(program,roles={}){
   g.append(el("rect",{x:-48,y:-17,width:96,height:34,rx:e.sort==="P"?10:17,fill:e.sort==="P"?"#28425a":"#1d3544",stroke:selected===k?"#f7d17b":"#7497b5","stroke-width":selected===k?3:1}));
   g.append(el("circle",{r:8,fill:"#d9e8f7","data-anchor":k}));
   if(e.sort==="P"){for(const [x,t] of [[-48,"B"],[48,"E"]]){g.append(el("circle",{cx:x,r:8,fill:t==="B"?"#e0b56a":"#76bbeb","data-socket":t}));g.append(el("text",{x:x*.75,y:4,fill:"#edf4fb","font-size":10,"text-anchor":"middle"},t));}}
-  const label=e.sort==="P"?(e.r.label.kind==="role"?e.id:String(e.r.label.value)):e.r.kind+(Object.hasOwn(e.r,"payload")?": "+json(e.r.payload):"");
+  const label=e.sort==="P"?(e.r.label.kind==="role"?e.id:String(e.r.label.value)):(["object","array"].includes(e.r.kind)?e.r.kind:e.r.kind+": "+json(e.r.payload));
   g.append(el("text",{y:-23,"text-anchor":"middle",fill:"#d4e6f7","font-size":11},label.slice(0,24)));
   const rs=Object.keys(roles).filter(r=>e.sort==="P"&&roles[r]===e.id);
   if(rs.length)g.append(el("text",{y:31,"text-anchor":"middle",fill:"#9ee5ba","font-size":11},rs.join("=")));
@@ -61,7 +63,7 @@ function render(){
  $("cancel-create").hidden=!creation;$("create-note").textContent=creation?(creation.begin?"Выберите конец нового дуплета":"Выберите начало нового дуплета"):"";
  $("import-json").disabled=session.running||session.dirty;$("export-json").disabled=session.appliedText===null;
  $("import-exact").disabled=session.running||session.dirty;
- network(p,f?.roles);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
+ network(p,f?.roles,active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";
  $("role-cards").replaceChildren();if(f){for(const [role,id] of Object.entries(f.roles)){const b=document.createElement("button");b.textContent=role;b.title=id;b.dataset.alias=String(Object.values(f.roles).filter(x=>x===id).length>1);b.onclick=()=>choose("P:"+id);$("role-cards").append(b)}}
@@ -100,6 +102,7 @@ $("apply").onclick=()=>act(()=>{if(session.projectionPartial&&!confirm("Apply з
 $("discard").onclick=()=>act(()=>{session.discard();syncText()});
 $("reset").onclick=()=>act(()=>{session.reset();clearView()});
 $("layout-reset").onclick=()=>act(()=>{session.layout.clear();zoom=1});
+$("network-scope").onchange=()=>act(()=>{session.layout.clear();zoom=1});
 $("zoom-in").onclick=()=>act(()=>{zoom=Math.min(2,zoom*1.2)});
 $("zoom-out").onclick=()=>act(()=>{zoom=Math.max(.5,zoom/1.2)});
 $("inspect").onclick=()=>act(()=>{clearView();session.inspect()});

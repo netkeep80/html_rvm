@@ -37,6 +37,9 @@ try{
  await clickId("reset");check(await evalv("!document.querySelector('#timeline [data-tentative=true]')"),"reset discards attempt");
  await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent)[0]==='4'"),"where result");
  await shot("01-where","header");
+ const focusCount=await evalv("document.querySelectorAll('#network [data-identity]').length");
+ await set("network-scope","all","change");check(await evalv("document.querySelectorAll('#network [data-identity]').length")>focusCount,"all view exposes additional runtime identities");
+ await set("network-scope","focus","change");
  await clickId("reflect");check(await evalv("JSON.parse(document.getElementById('source').value).$sub.$rel==='is_null'"),"Q updates source");
  await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent)[0]===null"),"reflective replay");
  await shot("02-reflection","header");
