@@ -296,19 +296,27 @@ function bMustTransition(result) {
   return result.state;
 }
 function endpointName(endpoint) {
-  return endpoint.sort + ":" + endpoint.id;
+  return (endpoint.sort === "N" ? "A:" : "D:") + endpoint.id;
 }
 function bDupletNames(state, id) {
   const d=bReadDuplet(state,id);
   return [endpointName(d.begin),endpointName(d.end)];
 }
 function aNames(map) {
-  const rev=new Map(Object.entries(map).map(([name,ref])=>[ref,name]));
-  return ref => rev.get(ref) ?? (()=>{ throw new Error("unmapped A ref "+ref?.id); })();
+  const rev=new Map(Object.entries(map).map(([name,ref])=>[ref,{name,kind:ref.kind}]));
+  return ref => {
+    const hit=rev.get(ref);
+    if(!hit) throw new Error("unmapped A ref "+ref?.id);
+    return (hit.kind === "atom" ? "A:" : "D:") + hit.name;
+  };
 }
-function cNames(map) {
+function cNames(carrier, map) {
   const rev=new Map(Object.entries(map).map(([name,id])=>[id,name]));
-  return id => rev.get(id) ?? (()=>{ throw new Error("unmapped C handle "+id); })();
+  return id => {
+    const name=rev.get(id);
+    if(!name) throw new Error("unmapped C handle "+id);
+    return (carrier.isAtom(id) ? "A:" : "D:") + name;
+  };
 }
 function traceStatuses(trace) {
   return trace.map(x=>x.outcome?.status ?? null);
@@ -454,7 +462,7 @@ test("E2-R2 correspondence W1 — exact ERSO identity partition and topology agr
   cm.S0=c.duplet(cm.anchor,cm.E0);
   cm.R1=c.duplet(cm.S0,cm.O0);
   c.reattach(cm.S0,cm.R1);
-  const cn=cNames(cm);
+  const cn=cNames(c,cm);
   const cObs={
     payloads:[c.payload(cm.E0),c.payload(cm.O0)],
     distinctAtoms:cm.E0!==cm.O0,
@@ -517,14 +525,14 @@ test("E2-R2 correspondence W2 — ent_abc attachment, mutation, reattach and dup
   cm.sB=c.duplet(cm.rB,cm.relB);
   cm.rC=c.duplet(cm.sB,cm.c);
   cm.sC=c.duplet(cm.rC,cm.relC);
-  let cn=cNames(cm);
+  let cn=cNames(c,cm);
   const cBefore={rB:cn(c.read(cm.rB).begin),rC:cn(c.read(cm.rC).begin)};
   c.rebind(cm.sA,cm.relA2);
   const cAfterEnd={rBBegin:cn(c.read(cm.rB).begin),sAEnd:cn(c.read(cm.sA).end)};
   const crbid=cm.rB;
   c.reattach(cm.rB,cm.rA);
   cm.rC2=c.duplet(cm.sB,cm.c);
-  cn=cNames(cm);
+  cn=cNames(c,cm);
   const cObs={before:cBefore,afterEnd:cAfterEnd,reattachStable:cm.rB===crbid,rBBegin:cn(c.read(cm.rB).begin),
     duplicateSame:cn(c.read(cm.rC).begin)===cn(c.read(cm.rC2).begin)&&cn(c.read(cm.rC).end)===cn(c.read(cm.rC2).end),duplicateDistinct:cm.rC!==cm.rC2};
   assert.deepEqual(aObs,bObs);
@@ -576,7 +584,7 @@ test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree
   const bTrace=[...bh.trace,...bhv.trace,...bv.trace,...bvh.trace];
   const bObs={sameR:endpointName(bFrameRE(b,"CHV").R)===endpointName(bFrameRE(b,"CVH").R),sameE:endpointName(bFrameRE(b,"CHV").E)===endpointName(bFrameRE(b,"CVH").E),
     depths:[bFrameDepth(b,"CHV"),bFrameDepth(b,"CVH")],parentsDistinct:b.frames.get("CHV").parent!==b.frames.get("CVH").parent,
-    O:["aSlot","rootSlot"],traceOps:bTrace.map(x=>x.op),traceRoundtrip:deserializeE1Record(serializeE1Record(b,bTrace)).trace.length===4};
+    O:["D:aSlot","D:rootSlot"],traceOps:bTrace.map(x=>x.op),traceRoundtrip:deserializeE1Record(serializeE1Record(b,bTrace)).trace.length===4};
 
   const a=new JsonNearCarrier();
   const as=a.atom("slots",{}), A=a.atom("A"), root=a.atom("root",{}), old=a.atom("oldModel",{}), m1=a.atom("M1",{});
@@ -586,7 +594,7 @@ test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree
   const ah=a.HObserved(a0,"$rel/a","CH"), ahv=a.VObserved(ah.frame,ams,"CHV"), av=a.VObserved(a0,ams,"CV"), avh=a.HObserved(av.frame,"$rel/a","CVH");
   const at=[...ah.trace,...ahv.trace,...av.trace,...avh.trace];
   const aObs={sameR:a.roleValue(ahv.frame,"R")===a.roleValue(avh.frame,"R"),sameE:a.roleValue(ahv.frame,"E")===a.roleValue(avh.frame,"E"),
-    depths:[a.depth(ahv.frame),a.depth(avh.frame)],parentsDistinct:ahv.frame.parent!==avh.frame.parent,O:[a.roleSlot(ahv.frame,"O").id,a.roleSlot(avh.frame,"O").id],
+    depths:[a.depth(ahv.frame),a.depth(avh.frame)],parentsDistinct:ahv.frame.parent!==avh.frame.parent,O:["D:"+a.roleSlot(ahv.frame,"O").id,"D:"+a.roleSlot(avh.frame,"O").id],
     traceOps:at.map(x=>x.op),traceRoundtrip:JsonNearCarrier.deserializeRecord(a.serializeRecord(at)).trace.length===4};
 
   const c=new DupletArrayCarrier();
@@ -596,7 +604,7 @@ test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree
   const c0=c.createFrame({E:cos,O:crs,R:crs,S:crs});
   const ch=c.HObserved(c0,"$rel/a"), chv=c.VObserved(ch.frame,cms), cvv=c.VObserved(c0,cms), cvh=c.HObserved(cvv.frame,"$rel/a");
   const ct=[...ch.trace,...chv.trace,...cvv.trace,...cvh.trace];
-  const cmap=cNames({aSlot:cas,rootSlot:crs});
+  const cmap=cNames(c,{aSlot:cas,rootSlot:crs});
   const cObs={sameR:c.roleValue(chv.frame,"R")===c.roleValue(cvh.frame,"R"),sameE:c.roleValue(chv.frame,"E")===c.roleValue(cvh.frame,"E"),
     depths:[c.depth(chv.frame),c.depth(cvh.frame)],parentsDistinct:c.parent(chv.frame)!==c.parent(cvh.frame),O:[cmap(c.roleSlot(chv.frame,"O")),cmap(c.roleSlot(cvh.frame,"O"))],
     traceOps:ct.map(x=>x.op),traceRoundtrip:DupletArrayCarrier.deserializeRecord(c.serializeRecord(ct)).trace.length===4};
@@ -617,7 +625,7 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   const bCommute=serializeLosslessMO(bab.state.mo)===serializeLosslessMO(bba.state.mo);
   b=bMustTransition(BH(b,{frame:"C0",path:"$rel/x",id:"HRX"})); b=bMustTransition(BH(b,{frame:"C0",path:"$obj/x",id:"HOX"}));
   const bBefore=serializeE1State(b), bconf=bCommitBranchWrites(b,[{frame:"HRX",target:N("one")},{frame:"HOX",target:N("two")}]);
-  const bObs={classify:bClassifyBranchWrites(b,bd).status,commute:bCommute,final:["one","two"],conflict:bconf.outcome.status,unchanged:serializeE1State(bconf.state)===bBefore};
+  const bObs={classify:bClassifyBranchWrites(b,bd).status,commute:bCommute,final:["A:one","A:two"],conflict:bconf.outcome.status,unchanged:serializeE1State(bconf.state)===bBefore};
 
   const makeA=()=>{
     const a=new JsonNearCarrier(), slots=a.atom("slots",{}), one=a.atom("one"), two=a.atom("two"), zero=a.atom("zero"), root=a.atom("root",{});
@@ -634,7 +642,7 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   const aCommute=a1.readDuplet("aSlot").end.id===a2.readDuplet("aSlot").end.id&&a1.readDuplet("bSlot").end.id===a2.readDuplet("bSlot").end.id;
   const aHRX=aa.a.H(aa.C0,"$rel/x","HRX"), aHOX=aa.a.H(aa.C0,"$obj/x","HOX"), aBefore=aa.a.serializeLossless();
   const aconf=aa.a.commitWrites([{frame:aHRX,target:aa.one},{frame:aHOX,target:aa.two}]);
-  const aObs={classify:a1.classifyWrites(ad1).status,commute:aCommute,final:[a1.readDuplet("aSlot").end.id,a1.readDuplet("bSlot").end.id],conflict:aconf.status,unchanged:aa.a.serializeLossless()===aBefore};
+  const aObs={classify:a1.classifyWrites(ad1).status,commute:aCommute,final:["A:"+a1.readDuplet("aSlot").end.id,"A:"+a1.readDuplet("bSlot").end.id],conflict:aconf.status,unchanged:aa.a.serializeLossless()===aBefore};
 
   const makeC=()=>{
     const c=new DupletArrayCarrier(), slots=c.atom("slots"), one=c.atom("one"), two=c.atom("two"), zero=c.atom("zero"), root=c.atom({});
@@ -649,7 +657,7 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   const cCommute=c1.roleValue(cc.HA,"R")===c2.roleValue(cc.HA,"R")&&c1.roleValue(cc.HB,"R")===c2.roleValue(cc.HB,"R");
   const cHRX=cc.c.H(cc.C0,"$rel/x"), cHOX=cc.c.H(cc.C0,"$obj/x"), cBefore=cc.c.serializeLossless();
   const cconf=cc.c.commitWrites([{frame:cHRX,target:cc.one},{frame:cHOX,target:cc.two}]);
-  const cm=cNames({one:cc.one,two:cc.two});
+  const cm=cNames(cc.c,{one:cc.one,two:cc.two});
   const cObs={classify:c1.classifyWrites(cd1).status,commute:cCommute,final:[cm(c1.read(cc.aSlot).end),cm(c1.read(cc.bSlot).end)],conflict:cconf.status,unchanged:cc.c.serializeLossless()===cBefore};
   assert.deepEqual(aObs,bObs);
   assert.deepEqual(cObs,bObs);
@@ -667,22 +675,26 @@ test("E2-R2 correspondence W6 — Q order, no-op semanticChange, runtime failure
   const bRec=deserializeE1Record(serializeE1Record(bc.state,bc.trace));
   const bObs={repeat:traceStatuses(br.trace),changes:traceChanges(br.trace),failure:traceStatuses(bf.trace),failureChanges:traceChanges(bf.trace),cycleStatus:bc.outcome.status,cycleTarget:endpointName(bFrameRoleValue(bc.state,"F","R")),recordTrace:bRec.trace.length};
 
-  const a=new JsonNearCarrier(), as=a.atom("slots",{}), az=a.atom("zero"), ao=a.atom("one"), at=a.atom("two");
-  const ar=a.duplet("rSlot",as,az), af=a.createFrame("F",{E:ar,O:ar,R:ar,S:ar});
-  const aq=a.Q(af,[{op:"rebindRole",role:"R",target:ao},{op:"rebindRole",role:"R",target:ao}]);
+  const abase=new JsonNearCarrier(), as=abase.atom("slots",{}), az=abase.atom("zero"), ao=abase.atom("one"), at=abase.atom("two");
+  const ar=abase.duplet("rSlot",as,az); abase.createFrame("F",{E:ar,O:ar,R:ar,S:ar});
+  const arun=JsonNearCarrier.deserializeLossless(abase.serializeLossless());
+  const afail=JsonNearCarrier.deserializeLossless(abase.serializeLossless());
+  const acycle=JsonNearCarrier.deserializeLossless(abase.serializeLossless());
+  const aq=arun.Q(arun.frame("F"),[{op:"rebindRole",role:"R",target:arun.ref("one")},{op:"rebindRole",role:"R",target:arun.ref("one")}]);
   const detached={kind:"atom",id:"missing",value:null,members:{}};
-  const aqf=a.Q(af,[{op:"rebindRole",role:"R",target:ao},{op:"rebindRole",role:"R",target:detached},{op:"rebindRole",role:"R",target:at}]);
-  const ac=a.Q(af,[{op:"rebindRole",role:"R",target:ar}]);
-  const arec=JsonNearCarrier.deserializeRecord(a.serializeRecord(ac.trace));
-  const aObs={repeat:traceStatuses(aq.trace),changes:traceChanges(aq.trace),failure:traceStatuses(aqf.trace),failureChanges:traceChanges(aqf.trace),cycleStatus:ac.status,cycleTarget:"P:rSlot",recordTrace:arec.trace.length};
+  const aqf=afail.Q(afail.frame("F"),[{op:"rebindRole",role:"R",target:afail.ref("one")},{op:"rebindRole",role:"R",target:detached},{op:"rebindRole",role:"R",target:afail.ref("two")}]);
+  const ac=acycle.Q(acycle.frame("F"),[{op:"rebindRole",role:"R",target:acycle.readDuplet("rSlot")}]);
+  const arec=JsonNearCarrier.deserializeRecord(acycle.serializeRecord(ac.trace));
+  const aObs={repeat:traceStatuses(aq.trace),changes:traceChanges(aq.trace),failure:traceStatuses(aqf.trace),failureChanges:traceChanges(aqf.trace),cycleStatus:ac.status,cycleTarget:"D:rSlot",recordTrace:arec.trace.length};
 
-  const c=new DupletArrayCarrier(), cs=c.atom("slots"), cz=c.atom("zero"), co=c.atom("one"), ct=c.atom("two");
-  const cr=c.duplet(cs,cz), cf=c.createFrame({E:cr,O:cr,R:cr,S:cr});
-  const cq=c.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:co}]);
-  const cqf=c.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:c.pairs.length+100},{op:"rebindRole",role:"R",target:ct}]);
-  const cyc=c.Q(cf,[{op:"rebindRole",role:"R",target:cr}]);
-  const crec=DupletArrayCarrier.deserializeRecord(c.serializeRecord(cyc.trace));
-  const cObs={repeat:traceStatuses(cq.trace),changes:traceChanges(cq.trace),failure:traceStatuses(cqf.trace),failureChanges:traceChanges(cqf.trace),cycleStatus:cyc.status,cycleTarget:"P:rSlot",recordTrace:crec.trace.length};
+  const cbase=new DupletArrayCarrier(), cs=cbase.atom("slots"), cz=cbase.atom("zero"), co=cbase.atom("one"), ct=cbase.atom("two");
+  const cr=cbase.duplet(cs,cz), cf=cbase.createFrame({E:cr,O:cr,R:cr,S:cr});
+  const crun=cloneC(cbase), cfail=cloneC(cbase), ccycle=cloneC(cbase);
+  const cq=crun.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:co}]);
+  const cqf=cfail.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:cfail.pairs.length+100},{op:"rebindRole",role:"R",target:ct}]);
+  const cyc=ccycle.Q(cf,[{op:"rebindRole",role:"R",target:cr}]);
+  const crec=DupletArrayCarrier.deserializeRecord(ccycle.serializeRecord(cyc.trace));
+  const cObs={repeat:traceStatuses(cq.trace),changes:traceChanges(cq.trace),failure:traceStatuses(cqf.trace),failureChanges:traceChanges(cqf.trace),cycleStatus:cyc.status,cycleTarget:"D:rSlot",recordTrace:crec.trace.length};
   assert.deepEqual(aObs,bObs);
   assert.deepEqual(cObs,bObs);
 });
