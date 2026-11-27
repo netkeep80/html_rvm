@@ -881,6 +881,7 @@ function primitiveWhere(tx, frameId) {
   let outputIndex = 0;
   for (let i = 0; i < prep.items.length; i += 1) {
     const itemP = prep.items[i];
+    consumeExecutionFuel(tx, frameId, itemP);
     const boolEndpoint = appendJSON(tx, null, "where-bool-null");
     const boolP = createRuntimeSlot(tx, boolEndpoint, "where-bool-slot");
     const itemFrame = createFrameTx(tx, {
@@ -910,6 +911,7 @@ function primitiveForeach(tx, frameId) {
   const previousP = [];
   const previousN = [];
   for (let i = 0; i < prep.items.length; i += 1) {
+    consumeExecutionFuel(tx, frameId, prep.items[i]);
     // Iterator allocator creates exactly one fresh result occurrence before body execution.
     const resultP = createIteratorIndex(tx, prep.R, i, "foreachobj");
     const itemFrame = createFrameTx(tx, {
@@ -927,8 +929,6 @@ function primitiveForeach(tx, frameId) {
       R: resultP.id,
       S: resultP.id
     });
-    // Per R2, each item consumes work before the item frame/body becomes observable.
-    consumeExecutionFuel(tx, itemFrame, resultP);
     const cap = itemCapability(resultP, prep.R, prep.outputArray, previousP, previousN, i);
     withIteratorCapability(tx, cap, () => executeSlot(tx, itemFrame, prep.S));
     const resultRelation = readRelation(tx, resultP);
