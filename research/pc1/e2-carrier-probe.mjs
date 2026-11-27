@@ -21,6 +21,27 @@ function deepCopy(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function evidenceTrace(entries) {
+  return deepFreeze(deepCopy(entries));
+}
+
+function decodePointerToken(token) {
+  if (/~(?:[^01]|$)/.test(token)) fail("INVALID_CONTEXT_PATH");
+  return token.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+function aRef(ref) {
+  return { kind: ref.kind, id: ref.id };
+}
+
 // A — JS/JSON-near control. Object identity is native JS identity; explicit ids are
 // retained only so a lossless JSON reference table can reconstruct sharing/cycles.
 export class JsonNearCarrier {
@@ -105,17 +126,17 @@ export class JsonNearCarrier {
   }
 
   resolve(frame, path) {
-    const m = /^(\$\$?)(rel|obj|sub|ent)\/(.+)$/.exec(path);
+    const m = /^(\$\$?)(rel|obj|sub|ent)\/(.*)$/.exec(path);
     if (!m) fail("EXPLICIT_CONTEXT_ROOT_REQUIRED");
     let f = frame;
-    if (m[1] === "$$") {
+    if (m[1] === "$") {
       if (!f.parent) fail("MISSING_PARENT");
       f = f.parent;
     }
     const map = { ent: "E", obj: "O", rel: "R", sub: "S" };
     let current = this.roleValue(f, map[m[2]]);
     let slot = null;
-    for (const segment of m[3].split("/")) {
+    for (const segment of m[3].split("/").map(decodePointerToken)) {
       if (!current || current.kind !== "atom") fail("MISSING_CONTEXT_PATH");
       slot = current.members[segment];
       if (!slot) fail("MISSING_CONTEXT_PATH");
@@ -135,6 +156,15 @@ export class JsonNearCarrier {
     });
   }
 
+  HObserved(frame, path, id) {
+    const routed = this.resolve(frame, path);
+    const next = this.H(frame, path, id);
+    return {
+      frame: next,
+      trace: evidenceTrace([{ op: "H", from: frame.id, to: next.id, path, routed: routed.id }])
+    };
+  }
+
   V(frame, modelSlot, id, { O = null, S = null } = {}) {
     return this.createFrame(id, {
       parent: frame,
@@ -145,8 +175,23 @@ export class JsonNearCarrier {
     });
   }
 
+  VObserved(frame, modelSlot, id, { O = null, S = null } = {}) {
+    const next = this.V(frame, modelSlot, id, { O, S });
+    return {
+      frame: next,
+      trace: evidenceTrace([{
+        op: "V",
+        from: frame.id,
+        to: next.id,
+        modelSlot: modelSlot.id,
+        O: next.roles.O.id,
+        S: next.roles.S.id
+      }])
+    };
+  }
+
   Q(frame, steps) {
-    if (!Array.isArray(steps)) return { status: "REJECT", diagnostic: "INVALID_Q_STEPS", trace: [] };
+    if (!Array.isArray(steps)) return { status: "REJECT", diagnostic: "INVALID_Q_STEPS", trace: evidenceTrace([]) };
     const prepared = [];
     try {
       for (let index = 0; index < steps.length; index += 1) {
@@ -157,22 +202,35 @@ export class JsonNearCarrier {
         prepared.push({ index, role, slot: frame.roles[role], target: step.target });
       }
     } catch (e) {
-      if (e?.diagnostic) return { status: "REJECT", diagnostic: e.diagnostic, trace: [] };
+      if (e?.diagnostic) return { status: "REJECT", diagnostic: e.diagnostic, trace: evidenceTrace([]) };
       throw e;
     }
     const trace = [];
     for (const p of prepared) {
-      // References in A are direct objects. A missing target is represented by a
-      // well-shaped detached reference; runtime existence is checked here.
       const exists = this.atoms.get(p.target.id) === p.target || this.duplets.get(p.target.id) === p.target;
       if (!exists) {
-        trace.push({ ...p, outcome: "REJECT" });
-        return { status: "REJECT", diagnostic: "MISSING_TARGET", trace };
+        trace.push({
+          index: p.index,
+          op: "rebindRole",
+          role: p.role,
+          slot: p.slot.id,
+          target: aRef(p.target),
+          outcome: { status: "REJECT", diagnostic: "MISSING_TARGET", semanticChange: false }
+        });
+        return { status: "REJECT", diagnostic: "MISSING_TARGET", trace: evidenceTrace(trace) };
       }
+      const semanticChange = p.slot.end !== p.target;
       p.slot.end = p.target;
-      trace.push({ ...p, outcome: "OK" });
+      trace.push({
+        index: p.index,
+        op: "rebindRole",
+        role: p.role,
+        slot: p.slot.id,
+        target: aRef(p.target),
+        outcome: { status: "OK", diagnostic: null, semanticChange }
+      });
     }
-    return { status: "OK", diagnostic: null, trace };
+    return { status: "OK", diagnostic: null, trace: evidenceTrace(trace) };
   }
 
   classifyWrites(writes) {
@@ -267,6 +325,20 @@ export class JsonNearCarrier {
     for (const f of o.frames) if (f.parent !== null) c.frames.get(f.id).parent = c.frames.get(f.parent) ?? fail("MISSING_PARENT");
     return c;
   }
+
+  serializeRecord(trace) {
+    return JSON.stringify({
+      $record: "pc1-r2-e2-a-record/2",
+      state: JSON.parse(this.serializeLossless()),
+      trace: deepCopy(trace)
+    });
+  }
+
+  static deserializeRecord(text) {
+    const o = typeof text === "string" ? JSON.parse(text) : text;
+    if (!o || o.$record !== "pc1-r2-e2-a-record/2" || !Array.isArray(o.trace)) fail("INVALID_RECORD");
+    return { state: JsonNearCarrier.deserializeLossless(o.state), trace: evidenceTrace(o.trace) };
+  }
 }
 
 // C — homogeneous pair topology. Every graph endpoint is an index into pairs.
@@ -308,6 +380,37 @@ export class DupletArrayCarrier {
     return this.atomPayload.has(i);
   }
 
+  isDuplet(i) {
+    return this.exists(i) && !this.isAtom(i);
+  }
+
+  requireDuplet(i, diagnostic = "MISSING_DUPLET") {
+    this.requireExisting(i, diagnostic);
+    if (this.isAtom(i)) fail(diagnostic);
+    return i;
+  }
+
+  validateState() {
+    for (let i = 1; i < this.pairs.length; i += 1) {
+      const pair = this.pairs[i];
+      if (pair === null) continue;
+      if (!Array.isArray(pair) || pair.length !== 2) fail("INVALID_PAIR_STATE");
+      this.requireExisting(pair[0], "DANGLING_PAIR_ENDPOINT");
+      this.requireExisting(pair[1], "DANGLING_PAIR_ENDPOINT");
+    }
+    for (const [id] of this.atomPayload) {
+      this.requireExisting(id, "INVALID_ATOM_CARRIER");
+      const [a, b] = this.pairs[id];
+      if (a !== id || b !== id) fail("INVALID_ATOM_CARRIER");
+    }
+    for (const k of ["null", "member", "nil"]) {
+      const id = this.internal[k];
+      this.requireExisting(id, "INVALID_INTERNAL_ROOT");
+      if (!this.isAtom(id)) fail("INVALID_INTERNAL_ROOT");
+    }
+    return true;
+  }
+
   payload(i) {
     this.requireExisting(i);
     if (!this.atomPayload.has(i)) fail("NOT_ATOM");
@@ -328,16 +431,30 @@ export class DupletArrayCarrier {
   }
 
   reattach(i, begin) {
-    this.requireExisting(i, "MISSING_DUPLET");
+    this.requireDuplet(i, "MISSING_DUPLET");
     this.requireExisting(begin, "MISSING_BEGIN");
     this.pairs[i][0] = begin;
+    this.validateState();
     return i;
   }
 
   rebind(i, end) {
-    this.requireExisting(i, "MISSING_DUPLET");
+    this.requireDuplet(i, "MISSING_DUPLET");
     this.requireExisting(end, "MISSING_END");
     this.pairs[i][1] = end;
+    this.validateState();
+    return i;
+  }
+
+  deleteDuplet(i) {
+    this.requireDuplet(i, "MISSING_DUPLET");
+    for (let j = 1; j < this.pairs.length; j += 1) {
+      if (j === i || this.pairs[j] === null) continue;
+      const [begin, end] = this.pairs[j];
+      if (begin === i || end === i) fail("DUPLET_STILL_REFERENCED");
+    }
+    this.pairs[i] = null;
+    this.validateState();
     return i;
   }
 
@@ -345,7 +462,8 @@ export class DupletArrayCarrier {
   // kv=[keyAtom,slot], tagged=[MEMBER,kv], edge=[owner,tagged].
   member(owner, key, slot) {
     this.requireExisting(owner, "MISSING_MEMBER_OWNER");
-    this.requireExisting(slot, "MISSING_SLOT");
+    if (!this.isAtom(owner)) fail("MEMBER_OWNER_NOT_ATOM");
+    this.requireDuplet(slot, "MISSING_SLOT");
     const keyAtom = this.atom(String(key));
     const kv = this.duplet(keyAtom, slot);
     const tagged = this.duplet(this.internal.member, kv);
@@ -373,7 +491,8 @@ export class DupletArrayCarrier {
   // Frame structure is entirely pair topology:
   // eo=[Eslot,Oslot], rs=[Rslot,Sslot], roles=[eo,rs], frame=[parent,roles].
   createFrame({ parent = this.internal.null, E, O, R, S }) {
-    for (const x of [parent, E, O, R, S]) this.requireExisting(x);
+    this.requireExisting(parent, "MISSING_PARENT");
+    for (const x of [E, O, R, S]) this.requireDuplet(x, "INVALID_FRAME_SLOT");
     const eo = this.duplet(E, O);
     const rs = this.duplet(R, S);
     const roles = this.duplet(eo, rs);
@@ -414,7 +533,7 @@ export class DupletArrayCarrier {
   }
 
   resolve(frame, path) {
-    const m = /^(\$\$?)(rel|obj|sub|ent)\/(.+)$/.exec(path);
+    const m = /^(\$\$?)(rel|obj|sub|ent)\/(.*)$/.exec(path);
     if (!m) fail("EXPLICIT_CONTEXT_ROOT_REQUIRED");
     let f = frame;
     if (m[1] === "$$") {
@@ -424,7 +543,7 @@ export class DupletArrayCarrier {
     const map = { ent: "E", obj: "O", rel: "R", sub: "S" };
     let slot = this.roleSlot(f, map[m[2]]);
     let owner = this.read(slot).end;
-    for (const segment of m[3].split("/")) {
+    for (const segment of m[3].split("/").map(decodePointerToken)) {
       slot = this.resolveMember(owner, segment);
       owner = this.read(slot).end;
     }
@@ -437,39 +556,77 @@ export class DupletArrayCarrier {
     return this.createFrame({ parent: this.parent(frame), E: source.E, O: source.O, R: routed, S: source.S });
   }
 
+  HObserved(frame, path) {
+    const routed = this.resolve(frame, path);
+    const next = this.H(frame, path);
+    return { frame: next, trace: evidenceTrace([{ op: "H", from: frame, to: next, path, routed }]) };
+  }
+
   V(frame, modelSlot, { O = null, S = null } = {}) {
     const source = this.frameRoles(frame);
-    this.requireExisting(modelSlot, "MISSING_MODEL_SLOT");
-    if (O !== null) this.requireExisting(O, "MISSING_O_SLOT");
-    if (S !== null) this.requireExisting(S, "MISSING_S_SLOT");
+    this.requireDuplet(modelSlot, "MISSING_MODEL_SLOT");
+    if (O !== null) this.requireDuplet(O, "MISSING_O_SLOT");
+    if (S !== null) this.requireDuplet(S, "MISSING_S_SLOT");
     return this.createFrame({ parent: frame, E: modelSlot, O: O ?? source.R, R: source.R, S: S ?? source.R });
   }
 
+  VObserved(frame, modelSlot, { O = null, S = null } = {}) {
+    const next = this.V(frame, modelSlot, { O, S });
+    const roles = this.frameRoles(next);
+    return {
+      frame: next,
+      trace: evidenceTrace([{
+        op: "V",
+        from: frame,
+        to: next,
+        modelSlot,
+        O: roles.O,
+        S: roles.S
+      }])
+    };
+  }
+
   Q(frame, steps) {
-    if (!Array.isArray(steps)) return { status: "REJECT", diagnostic: "INVALID_Q_STEPS", trace: [] };
+    if (!Array.isArray(steps)) return { status: "REJECT", diagnostic: "INVALID_Q_STEPS", trace: evidenceTrace([]) };
     const prepared = [];
     try {
       for (let index = 0; index < steps.length; index += 1) {
         const step = steps[index];
         if (!step || step.op !== "rebindRole") fail("INVALID_Q_STEP");
         const role = requireRole(step.role);
-        this.requireHandle(step.target, "INVALID_ENDPOINT"); // shape only; existence is runtime
+        this.requireHandle(step.target, "INVALID_ENDPOINT");
         prepared.push({ index, role, slot: this.roleSlot(frame, role), target: step.target });
       }
     } catch (e) {
-      if (e?.diagnostic) return { status: "REJECT", diagnostic: e.diagnostic, trace: [] };
+      if (e?.diagnostic) return { status: "REJECT", diagnostic: e.diagnostic, trace: evidenceTrace([]) };
       throw e;
     }
     const trace = [];
     for (const p of prepared) {
       if (!this.exists(p.target)) {
-        trace.push({ ...p, outcome: "REJECT" });
-        return { status: "REJECT", diagnostic: "MISSING_TARGET", trace };
+        trace.push({
+          index: p.index,
+          op: "rebindRole",
+          role: p.role,
+          slot: p.slot,
+          target: p.target,
+          outcome: { status: "REJECT", diagnostic: "MISSING_TARGET", semanticChange: false }
+        });
+        return { status: "REJECT", diagnostic: "MISSING_TARGET", trace: evidenceTrace(trace) };
       }
+      const semanticChange = this.pairs[p.slot][1] !== p.target;
       this.pairs[p.slot][1] = p.target;
-      trace.push({ ...p, outcome: "OK" });
+      trace.push({
+        index: p.index,
+        op: "rebindRole",
+        role: p.role,
+        slot: p.slot,
+        target: p.target,
+        outcome: { status: "OK", diagnostic: null, semanticChange }
+      });
     }
-    return { status: "OK", diagnostic: null, trace };
+    this.validateState();
+    return { status: "OK", diagnostic: null, trace: evidenceTrace(trace) };
   }
 
   classifyWrites(writes) {
@@ -497,8 +654,11 @@ export class DupletArrayCarrier {
 
   createBundle(entries) {
     if (!Array.isArray(entries)) fail("INVALID_BUNDLE");
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object") fail("INVALID_BUNDLE_ENTRY");
+      for (const x of [entry.R, entry.O, entry.S]) this.requireExisting(x, "INVALID_ENDPOINT");
+    }
     const occurrences = entries.map(({ R, O, S }) => {
-      for (const x of [R, O, S]) this.requireExisting(x, "INVALID_ENDPOINT");
       const ro = this.duplet(R, O);
       return this.duplet(ro, S);
     });
@@ -543,9 +703,10 @@ export class DupletArrayCarrier {
   }
 
   serializeLossless() {
+    this.validateState();
     return JSON.stringify({
-      $carrier: "pc1-r2-e2-c/1",
-      pairs: this.pairs.slice(1).map(p => [...p]),
+      $carrier: "pc1-r2-e2-c/2",
+      pairs: this.pairs.slice(1).map(p => p === null ? null : [...p]),
       atomPayload: [...this.atomPayload].map(([id, value]) => [id, deepCopy(value)]),
       internal: { ...this.internal }
     });
@@ -553,57 +714,54 @@ export class DupletArrayCarrier {
 
   static deserializeLossless(text) {
     const o = typeof text === "string" ? JSON.parse(text) : text;
-    if (!o || o.$carrier !== "pc1-r2-e2-c/1" || !Array.isArray(o.pairs) || !Array.isArray(o.atomPayload)) fail("INVALID_SERIALIZATION");
+    if (!o || o.$carrier !== "pc1-r2-e2-c/2" || !Array.isArray(o.pairs) || !Array.isArray(o.atomPayload)) fail("INVALID_SERIALIZATION");
     const c = Object.create(DupletArrayCarrier.prototype);
-    c.pairs = [null, ...o.pairs.map(p => [p[0], p[1]])];
+    c.pairs = [null, ...o.pairs.map(p => p === null ? null : [p[0], p[1]])];
     c.atomPayload = new Map(o.atomPayload.map(([id, value]) => [id, deepCopy(value)]));
     c.internal = { ...o.internal };
-    for (let i = 1; i < c.pairs.length; i += 1) {
-      const [a, b] = c.pairs[i];
-      c.requireExisting(a, "INVALID_SERIALIZATION");
-      c.requireExisting(b, "INVALID_SERIALIZATION");
-    }
-    for (const [id] of c.atomPayload) {
-      c.requireExisting(id, "INVALID_SERIALIZATION");
-      const [a, b] = c.pairs[id];
-      if (a !== id || b !== id) fail("INVALID_ATOM_CARRIER");
-    }
-    for (const k of ["null", "member", "nil"]) c.requireExisting(c.internal[k], "INVALID_INTERNAL_ROOT");
+    c.validateState();
     return c;
   }
 
   serializeRecord(trace) {
-    return JSON.stringify({ $record: "pc1-r2-e2-c-record/1", state: JSON.parse(this.serializeLossless()), trace: deepCopy(trace) });
+    return JSON.stringify({ $record: "pc1-r2-e2-c-record/2", state: JSON.parse(this.serializeLossless()), trace: deepCopy(trace) });
   }
 
   static deserializeRecord(text) {
     const o = typeof text === "string" ? JSON.parse(text) : text;
-    if (!o || o.$record !== "pc1-r2-e2-c-record/1" || !Array.isArray(o.trace)) fail("INVALID_RECORD");
-    return { state: DupletArrayCarrier.deserializeLossless(o.state), trace: deepCopy(o.trace) };
+    if (!o || o.$record !== "pc1-r2-e2-c-record/2" || !Array.isArray(o.trace)) fail("INVALID_RECORD");
+    return { state: DupletArrayCarrier.deserializeLossless(o.state), trace: evidenceTrace(o.trace) };
   }
 }
 
 export const E2_LEDGER_C = Object.freeze([
-  ["duplet occurrence identity", "CARRIER-PRIMITIVE", "append-only pair index is lifetime identity"],
-  ["endpoint topology and recovery", "DUPLET-DERIVED", "stored directly as ordered pair indices"],
-  ["stable identity under endpoint rebind/reattach", "CARRIER-PRIMITIVE", "mutation must preserve allocated pair index"],
+  ["duplet occurrence identity", "CARRIER-PRIMITIVE", "append-only pair index is lifetime identity; deleted indices are tombstones and are never reused"],
+  ["endpoint topology and recovery", "DUPLET-DERIVED", "relative to the declared live-pair domain, endpoints are ordered pair indices"],
+  ["stable identity under endpoint rebind/reattach", "CARRIER-PRIMITIVE", "only non-atom live duplets are mutable; mutation preserves the allocated index"],
   ["shared vs distinct equal-valued duplets", "DUPLET-DERIVED", "sharing is equality of occurrence indices; equal pair values do not collapse"],
-  ["self and mutual cycles", "DUPLET-DERIVED", "pair endpoints may reference any live pair occurrence"],
-  ["frame E/O/R/S structure", "DUPLET-DERIVED", "nested pair topology encodes role-slot tuple"],
-  ["frame parent ancestry", "DUPLET-DERIVED", "frame begin points to parent frame occurrence"],
-  ["role-carrier alias partition", "DUPLET-DERIVED", "roles alias iff tuple leaves contain same slot index"],
-  ["object membership topology", "DUPLET-DERIVED", "owner/member-tag/key/slot incidence is pair topology"],
-  ["JSON scalar payload and member-key text", "SIDE-METADATA", "opaque scalar values remain attached to atom carrier occurrences"],
-  ["fresh occurrence allocation", "CARRIER-PRIMITIVE", "topology alone cannot create a new lifetime identity"],
-  ["H path resolution and transition", "CARRIER-PRIMITIVE", "runtime scan/routing policy operates over pair topology"],
+  ["self and mutual cycles", "DUPLET-DERIVED", "live non-atom pair endpoints may reference live pair occurrences"],
+  ["frame E/O/R/S structure", "DUPLET-DERIVED", "relative to the declared frame shape, nested pair topology encodes the role-slot tuple"],
+  ["frame parent ancestry", "DUPLET-DERIVED", "relative to the frame shape and null bootstrap root, frame begin points to parent occurrence"],
+  ["role-carrier alias partition", "DUPLET-DERIVED", "within the declared frame shape, roles alias iff tuple leaves contain the same slot index"],
+  ["object membership topology", "DUPLET-DERIVED", "relative to the atom boundary and member bootstrap tag, owner/key/slot incidence is pair topology"],
+  ["JSON scalar payload and member-key text", "SIDE-METADATA", "opaque scalar/key values remain attached to atom carrier occurrences"],
+  ["fresh occurrence allocation", "CARRIER-PRIMITIVE", "append-only allocation creates a lifetime identity; deleted indices are not reused"],
+  ["H path resolution and transition", "CARRIER-PRIMITIVE", "runtime routing policy operates over declared member/frame shapes; object-key JSON-pointer tokens are admitted, array-index typing is outside E2"],
   ["V fresh-child transition", "CARRIER-PRIMITIVE", "runtime allocates a fresh frame and applies inheritance/default rules"],
-  ["Q sequential execution/failure boundary", "CARRIER-PRIMITIVE", "runtime sequencing, prefix commit and suffix stop are operational rules"],
-  ["alias-conflict rejection policy", "CARRIER-PRIMITIVE", "topology exposes same slot; rejection policy is operational"],
-  ["bundle occurrence identity and order", "DUPLET-DERIVED", "entry occurrences and cons chain encode multiplicity/order"],
-  ["bundle functional classification", "DUPLET-DERIVED", "computed solely from decoded ordered pair topology and endpoint identities"],
-  ["lossless structural state", "DUPLET-DERIVED", "pair array reconstructs graph identity/topology exactly"],
-  ["atom/bootstrap reconstruction", "SIDE-METADATA", "payload table and internal root handles accompany pair array"],
-  ["ordered execution trace", "EVIDENCE-ONLY", "trace is intentionally external to semantic state"]
+  ["Q sequential execution/failure boundary", "CARRIER-PRIMITIVE", "runtime sequencing, semanticChange observation, prefix commit and suffix stop are operational rules"],
+  ["alias-conflict rejection policy", "CARRIER-PRIMITIVE", "topology exposes the same slot; rejection policy is operational"],
+  ["bundle occurrence identity and order", "DUPLET-DERIVED", "relative to the nil bootstrap and cons/entry shape, occurrence indices and chain encode multiplicity/order"],
+  ["bundle functional predicate", "DUPLET-DERIVED", "functional/non-functional classification is computed from decoded R/O/S topology and endpoint identities"],
+  ["bundle identity-fallback disposition", "CARRIER-PRIMITIVE", "FACTORIZED vs FALLBACK_IDENTITY for equal duplicate occurrences additionally depends on preserveOccurrenceIdentity policy"],
+  ["lossless structural state", "DUPLET-DERIVED", "for validated admitted states, pair array plus declared shape/root conventions reconstructs graph identity/topology exactly"],
+  ["atom/bootstrap reconstruction", "SIDE-METADATA", "payload table and internal null/member/nil root handles accompany the pair array"],
+  ["ordered execution trace", "EVIDENCE-ONLY", "immutable identity-based observations are serialized separately from semantic state"]
 ]);
+
+export const E2_LEDGER_QUALIFICATION_C = Object.freeze({
+  derivedMeans: "derivable from validated pair topology relative to declared atom/bootstrap roots and shape conventions, not standalone untyped self-description",
+  contextualAddressing: "E2 admits E1 object-key JSON-pointer token decoding (~0, ~1, including empty keys); array-index typing remains outside the W1-W8 correspondence subset",
+  deletion: "non-atom duplet deletion is admitted only when no other live pair references the occurrence; allocation is append-only and deleted indices are never reused"
+});
 
 export const E2_DISPOSITION_CANDIDATE = "NO_SELECTION / MORE_EVIDENCE_REQUIRED";
