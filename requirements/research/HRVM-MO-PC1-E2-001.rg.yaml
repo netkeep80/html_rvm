@@ -1,0 +1,11 @@
+format: repo-guard/requirement-v1
+id: HRVM-MO-PC1-E2-001
+normative: "### HRVM-MO-PC1-E2-001 — Исследовательский PC1-R2-E2 carrier probe MUST сравнивать JS/JSON-near control, принятый R0 N/P + E1 control и homogeneous JavaScript duplet-array carrier на общей ограниченной системе наблюдений; для C MUST быть явно классифицированы DUPLET-DERIVED / CARRIER-PRIMITIVE / SIDE-METADATA / EVIDENCE-ONLY / OPEN механизмы, при сохранении occurrence identity, sharing, frame ancestry, role aliasing, H/V/Q boundaries, bundle fallback, lossless roundtrip и естественной JSON-facing перспективы; pair interning, индексы/БД, native code, общий интерпретатор и финальная grammar selection запрещены в E2."
+lifecycle: { accepted: false, current: false, published: false }
+relations:
+  - predicates: [ derives_from ]
+    target: { kind: requirement, id: HRVM-MO-PC1-E1-001 }
+  - predicates: [ implemented_by ]
+    target: { kind: artifact, path: "research/pc1/e2-carrier-probe.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tests/pc1-e2-carrier-probe.test.mjs" }
