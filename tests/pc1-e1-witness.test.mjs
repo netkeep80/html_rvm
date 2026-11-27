@@ -299,3 +299,161 @@ test("PC1-R2-E1 invariants — explicit roots only and rejected frame/address op
   assert.equal(duplicate.outcome.diagnostic, "FRAME_NO_RESURRECTION");
   assert.equal(serializeE1State(duplicate.state), before);
 });
+
+test("PC1-R2-E1-R2 P2-01 — distinct delimiter-bearing pairs with different S factorize", () => {
+  const entries = [
+    { id: "a", R: N("x|N:y"), O: N("z"), S: N("one") },
+    { id: "b", R: N("x"), O: N("y|N:z"), S: N("two") }
+  ];
+  const result = factorBundle(entries);
+  assert.equal(result.status, "FACTORIZED");
+  assert.deepEqual(result.entries, entries);
+  assert.deepEqual(result.table, entries.map(({R,O,S}) => ({R,O,S})));
+});
+
+test("PC1-R2-E1-R2 P2-01 — distinct delimiter-bearing pairs with equal S factorize", () => {
+  const entries = [
+    { id: "a", R: N("x|N:y"), O: N("z"), S: N("one") },
+    { id: "b", R: N("x"), O: N("y|N:z"), S: N("one") }
+  ];
+  const result = factorBundle(entries);
+  assert.equal(result.status, "FACTORIZED");
+  assert.equal(result.table.length, 2);
+  assert.deepEqual(result.entries, entries);
+});
+
+const bundleEntry = (id, o, s) => ({ id, R: N("not"), O: N(o), S: N(s) });
+const permutations3 = ([a,b,c]) => [[a,b,c],[a,c,b],[b,a,c],[b,c,a],[c,a,b],[c,b,a]];
+
+test("PC1-R2-E1-R2 P2-02 — nonfunctionality dominates duplicate identity", () => {
+  const entries = [bundleEntry("i","0","1"), bundleEntry("j","0","1"), bundleEntry("k","0","0")];
+  const result = factorBundle(entries);
+  assert.equal(result.status, "NON_FUNCTIONAL");
+  assert.deepEqual(result.entries, entries);
+});
+
+test("PC1-R2-E1-R2 P2-02 — contradiction before duplicate retains every occurrence", () => {
+  const entries = [bundleEntry("i","0","1"), bundleEntry("k","0","0"), bundleEntry("j","0","1")];
+  const result = factorBundle(entries);
+  assert.equal(result.status, "NON_FUNCTIONAL");
+  assert.deepEqual(result.entries, entries);
+});
+
+test("PC1-R2-E1-R2 P2-02 — identity fallback retains independent suffix", () => {
+  const entries = [bundleEntry("i","0","1"), bundleEntry("j","0","1"), bundleEntry("l","1","0")];
+  const result = factorBundle(entries);
+  assert.equal(result.status, "FALLBACK_IDENTITY");
+  assert.deepEqual(result.entries, entries);
+});
+
+test("PC1-R2-E1-R2 P2-02 — invalid suffix is validated after either conflict", () => {
+  for (const prefix of [
+    [bundleEntry("i","0","1"), bundleEntry("j","0","1")],
+    [bundleEntry("i","0","1"), bundleEntry("j","0","0")]
+  ]) {
+    for (const [suffix, diagnostic] of [
+      [bundleEntry("i","2","1"), "DUPLICATE_BUNDLE_ID"],
+      [bundleEntry("","2","1"), "INVALID_BUNDLE_ID"],
+      [bundleEntry("bad\0id","2","1"), "INVALID_BUNDLE_ID"],
+      [{...bundleEntry("k","2","1"), S: {sort:"X",id:"x"}}, "INVALID_ENDPOINT"]
+    ]) {
+      assert.throws(() => factorBundle([...prefix,suffix]), e => e?.diagnostic === diagnostic);
+    }
+  }
+});
+
+test("PC1-R2-E1-R2 P2-01 — typed pairs and typed results preserve N/P distinction", () => {
+  const a = {id:"a",R:N("x"),O:P("y"),S:N("z")};
+  const b = {id:"b",R:P("x"),O:P("y"),S:P("z")};
+  const c = {id:"c",R:N("x"),O:N("y"),S:P("z")};
+  assert.equal(factorBundle([a,b,c]).table.length,3);
+  assert.equal(factorBundle([a,{...a,id:"d",S:P("z")}]).status,"NON_FUNCTIONAL");
+});
+
+test("PC1-R2-E1-R2 W8 — bounded pairwise oracle, all permutations, both identity policies", () => {
+  // Independent comparison uses typed fields directly, not the production key.
+  const eq = (a,b) => a.sort === b.sort && a.id === b.id;
+  const domain = [
+    [N("x|N:y"),N("z")],
+    [N("x"),N("y|N:z")],
+    [P("x"),N("y|N:z")],
+    [N("x"),P("y|N:z")]
+  ].flatMap(([R,O]) => [N("s"),P("s")].map(S => ({R,O,S})));
+  for (const a of domain) for (const b of domain) for (const c of domain) {
+    for (const entries of permutations3([{...a,id:"i"},{...b,id:"j"},{...c,id:"k"}])) {
+      for (const preserveOccurrenceIdentity of [true,false]) {
+        const pairs = [[entries[0],entries[1]],[entries[0],entries[2]],[entries[1],entries[2]]]
+          .filter(([x,y]) => eq(x.R,y.R) && eq(x.O,y.O));
+        const expected = pairs.some(([x,y]) => !eq(x.S,y.S)) ? "NON_FUNCTIONAL" :
+          preserveOccurrenceIdentity && pairs.length ? "FALLBACK_IDENTITY" : "FACTORIZED";
+        const got = factorBundle(entries,{preserveOccurrenceIdentity});
+        assert.equal(got.status,expected);
+        assert.deepEqual(got.entries,entries);
+        if (expected === "FACTORIZED") {
+          assert.equal(got.table.length, entries.filter((x,i) => !entries.slice(0,i).some(y => eq(x.R,y.R)&&eq(x.O,y.O))).length);
+          for (const e of entries) assert.ok(got.table.some(r => eq(r.R,e.R)&&eq(r.O,e.O)&&eq(r.S,e.S)));
+        } else {
+          const [x,y] = got.conflict.map(id => entries.find(e => e.id===id));
+          assert.notEqual(x.id,y.id);
+          assert.ok(eq(x.R,y.R)&&eq(x.O,y.O));
+          assert.equal(eq(x.S,y.S),expected==="FALLBACK_IDENTITY");
+        }
+      }
+    }
+  }
+});
+
+test("PC1-R2-E1-R2 P3-01 — Q preflight rejection vs committed prefix on runtime rejection", () => {
+  let s = createE1State();
+  for (const id of ["slots","zero","one","two"]) s = node(s,id);
+  s = slot(s,"rSlot",N("slots"),N("zero"));
+  s = mustTransition(createFrame(s,{id:"C",E:"rSlot",O:"rSlot",R:"rSlot",S:"rSlot"}));
+  const before = serializeE1State(s);
+  const first = {op:"rebindRole",role:"R",target:N("one")};
+  const last = {op:"rebindRole",role:"R",target:N("two")};
+  for (const [bad,diagnostic] of [
+    [{op:"unknown"}, "INVALID_Q_STEP"],
+    [{...first,role:"X"}, "INVALID_FRAME_ROLE"],
+    [{...first,target:{sort:"X",id:"one"}}, "INVALID_ENDPOINT"]
+  ]) {
+    const q = Q(s,{frame:"C",steps:[first,bad,last]});
+    assert.equal(q.outcome.status,"REJECT");
+    assert.equal(q.outcome.diagnostic,diagnostic);
+    assert.equal(q.outcome.semanticChange,false);
+    assert.equal(serializeE1State(q.state),before);
+    assert.deepEqual(q.trace,[]);
+  }
+  const q = Q(s,{frame:"C",steps:[first,{...first,target:N("missing")},last]});
+  assert.equal(q.outcome.status,"REJECT");
+  assert.equal(q.outcome.diagnostic,"MISSING_TARGET");
+  assert.equal(q.outcome.semanticChange,true);
+  assert.equal(serializeE1State(s),before);
+  const prefix = Q(s,{frame:"C",steps:[first]});
+  assert.equal(serializeE1State(q.state),serializeE1State(prefix.state));
+  assert.deepEqual(q.trace.map(e=>e.outcome.status),["OK","REJECT"]);
+  assert.deepEqual(q.trace.map(e=>e.index),[0,1]);
+});
+
+test("PC1-R2-E1-R2 P3-02 — W2 shared vs distinct hidden duplets observable through dependent attachments", () => {
+  let base = createE1State();
+  for (const id of ["a","b","c","x","y"]) base = node(base,id);
+  base = mustTransition(createDuplet(base,{id:"h1",begin:N("a"),end:N("b")}));
+  base = mustTransition(createDuplet(base,{id:"h2",begin:N("a"),end:N("b")}));
+  base = mustTransition(createDuplet(base,{id:"d1",begin:P("h1"),end:N("x")}));
+  const shared = mustTransition(createDuplet(base,{id:"d2",begin:P("h1"),end:N("y")}));
+  const distinct = mustTransition(createDuplet(base,{id:"d2",begin:P("h2"),end:N("y")}));
+  const observe = s => ["d1","d2"].map(id => readDuplet(s,readDuplet(s,id).begin.id).end.id);
+  assert.deepEqual(observe(shared),["b","b"]);
+  assert.deepEqual(observe(distinct),["b","b"]);
+  const sharedAfter = mustTransition(rebindDupletEnd(shared,"h1",N("c")));
+  const distinctAfter = mustTransition(rebindDupletEnd(distinct,"h1",N("c")));
+  assert.deepEqual(observe(sharedAfter),["c","c"]);
+  assert.deepEqual(observe(distinctAfter),["c","b"]);
+  for (const s of [sharedAfter,distinctAfter]) {
+    assert.equal(readDuplet(s,"d1").id,"d1");
+    assert.equal(readDuplet(s,"d2").id,"d2");
+    const decoded = deserializeE1State(serializeE1State(s));
+    assert.deepEqual(observe(decoded),observe(s));
+    assert.equal(serializeE1State(decoded),serializeE1State(s));
+  }
+});

@@ -41,11 +41,6 @@ function requireRole(role) {
   return role;
 }
 
-function endpointKey(endpoint) {
-  const e = normalizeEndpoint(endpoint);
-  return e.sort + ":" + e.id;
-}
-
 function frameClone(frame) {
   return {
     id: frame.id,
@@ -340,6 +335,11 @@ export function V(state, { frame: frameId, modelSlot, id, O = null, S = null }) 
   });
 }
 
+// Q is sequential, not atomic. With a valid state and existing frame,
+// preflight validates every step's shape, role and typed endpoint, without
+// testing target existence. A preflight rejection changes nothing and has
+// no trace. During execution R0 commits successful steps until the first
+// rejection; the trace includes that attempted step, but no later steps.
 export function Q(state, { frame: frameId, steps }) {
   validateE1State(state);
   const frame = frameRecord(state, frameId);
@@ -432,35 +432,40 @@ export function commitBranchWrites(state, writes) {
   };
 }
 
+// Validate the whole input before classifying. The typed tuple is injective
+// even when endpoint IDs contain separators. Conflict IDs are witnesses,
+// not a canonical ordering; entries always retain the full input order.
 export function factorBundle(entries, { preserveOccurrenceIdentity = true } = {}) {
   if (!Array.isArray(entries)) rejectE1("INVALID_BUNDLE");
   const seenIds = new Set();
-  const table = new Map();
   const normalized = [];
   for (const raw of entries) {
     const id = requireId(raw?.id, "INVALID_BUNDLE_ID");
     if (seenIds.has(id)) rejectE1("DUPLICATE_BUNDLE_ID");
     seenIds.add(id);
-    const entry = {
+    normalized.push({
       id,
       R: normalizeEndpoint(raw.R),
       O: normalizeEndpoint(raw.O),
       S: normalizeEndpoint(raw.S)
-    };
-    normalized.push(entry);
-    const key = endpointKey(entry.R) + "|" + endpointKey(entry.O);
+    });
+  }
+  const table = new Map();
+  let nonfunctional = null;
+  let identity = null;
+  for (const entry of normalized) {
+    const key = JSON.stringify([entry.R.sort, entry.R.id, entry.O.sort, entry.O.id]);
     const prior = table.get(key);
     if (!prior) {
       table.set(key, entry);
-      continue;
-    }
-    if (!sameEndpoint(prior.S, entry.S)) {
-      return { status: "NON_FUNCTIONAL", entries: normalized, conflict: [prior.id, entry.id] };
-    }
-    if (preserveOccurrenceIdentity && prior.id !== entry.id) {
-      return { status: "FALLBACK_IDENTITY", entries: normalized, conflict: [prior.id, entry.id] };
+    } else if (!sameEndpoint(prior.S, entry.S)) {
+      nonfunctional ??= [prior.id, entry.id];
+    } else if (preserveOccurrenceIdentity) {
+      identity ??= [prior.id, entry.id];
     }
   }
+  if (nonfunctional) return { status: "NON_FUNCTIONAL", entries: normalized, conflict: nonfunctional };
+  if (identity) return { status: "FALLBACK_IDENTITY", entries: normalized, conflict: identity };
   return {
     status: "FACTORIZED",
     entries: normalized,
