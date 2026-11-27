@@ -181,7 +181,10 @@ test("PC2-A2 reflection — patch descendant of one generated model P and re-exe
   assert.equal(run.diagnostic, null);
   assert.deepEqual(run.result, { first: "LITERAL", second: "ROW" });
 
-  const refs = run.committedTrace.filter(event => event.op === "exec-ref" && event.address === "$ent/func");
+  // The lambda branch's exact reference is intentionally prepared in C, so
+  // identity evidence is the resolver record rather than an exec-ref hop in H.
+  const refs = run.committedTrace.filter(event =>
+    event.op === "resolve" && event.address === "$ent/func" && event.status === "OK");
   assert.equal(refs.length, 2);
   assert.equal(refs[0].slot, refs[1].slot);
 
