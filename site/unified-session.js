@@ -62,12 +62,44 @@ export function sourceIdentityAt(program,text,offset){
  if(!v.ok)return null;
  return offset<x.valueStart&&v.relation?v.relation:v.node;
 }
-export function rangesForIdentity(program,text,identity){
- if(text===null)return [];
+export function sourceOccurrenceInfo(program,text,identity){
+ if(text===null)return {ranges:[],truncated:false,diagnostic:"SOURCE_UNAVAILABLE"};
  const v=projectionOccurrences(program.state.mo,undefined,identity);
- if(!v.ok)return [];
+ if(!v.ok)return {ranges:[],truncated:false,diagnostic:v.diagnostic};
  const paths=new Set(v.paths.map(x=>JSON.stringify(x)));
- return sourceRanges(text).filter(x=>paths.has(JSON.stringify(x.path)));
+ try{return {ranges:sourceRanges(text).filter(x=>paths.has(JSON.stringify(x.path))),truncated:v.truncated,diagnostic:null}}
+ catch(e){return {ranges:[],truncated:true,diagnostic:e.message}}
+}
+export function rangesForIdentity(program,text,identity){return sourceOccurrenceInfo(program,text,identity).ranges}
+export function occurrenceIdentity(program,root,path,selected){
+ const v=locateVPath(program.state.mo,root,path),e=selected.sort==="P"?v.relation:v.node;
+ return v.ok&&e?.sort===selected.sort&&e.id===selected.id?e:null;
+}
+export function incomingAttachments(program,identity){
+ const out=[];
+ for(const [id,r] of program.state.mo.relations)for(const [side,e] of [["B",r.owner],["E",r.target]])if(e?.sort===identity.sort&&e.id===identity.id)out.push({identity:P(id),side});
+ return out;
+}
+// Compare actual persistent states at adjacent semantic boundaries, for observation only.
+export function executionStepView(run,index){
+ const snap=run.snapshots[index];if(!snap)throw Error("Invalid step");
+ const before=index?run.snapshots[index-1].program:run.sourceProgram;
+ const changed=[];
+ for(const sort of ["N","P"]){
+  const a=sort==="N"?before.state.mo.nodes:before.state.mo.relations,b=sort==="N"?snap.program.state.mo.nodes:snap.program.state.mo.relations;
+  for(const id of new Set([...a.keys(),...b.keys()]))if(JSON.stringify(a.get(id))!==JSON.stringify(b.get(id)))changed.push({sort,id,kind:!a.has(id)?"born":!b.has(id)?"dead":"changed"});
+ }
+ const event=snap.event,frame=snap.program.state.frames.get(event.frame);
+ const outputSlot=frame?.roles[event.outputRole],resultEndpoint=snap.program.state.mo.relations.get(outputSlot)?.target??null;
+ return {program:snap.program,event,trace:snap.trace,changed,outputSlot,resultEndpoint};
+}
+export function createImportCoordinator(){
+ let generation=0;
+ return {cancel(){generation++},async request(read,commit,onError){
+  const token=++generation;
+  try{const value=await read();if(token!==generation)return "STALE";commit(value);return "COMMITTED"}
+  catch(e){if(token!==generation)return "STALE";onError(e);return "REJECT"}
+ }};
 }
 function parseSource(text){if(typeof text!=="string")throw Error("No Natural JSON source");const value=cloneStrictJSON(JSON.parse(text));sourceRanges(text);return subjectivateNaturalJSON(value)}
 // Reader only: materialize an independent value; never acquire a writer.
@@ -165,7 +197,7 @@ export function createUnifiedSession(text = examples.where,{model=null}={}) {
   try{const n=attempt.next();if(!n.done){tentative.push(n.value);return false}
    attempt=null;const snapshots=tentative;tentative=[];
    if(n.value.mode==="REJECT"){rejectAttempt("run",n.value.diagnostic);branch=null}
-   else{branch={...n.value,snapshots};runs.push(branch);history.push({kind:"run",run:branch})}
+   else{branch={...n.value,snapshots,sourceProgram:applied,sourceText:appliedText};runs.push(branch);history.push({kind:"run",run:branch})}
    return true
   }catch(e){reset();diagnostic=e.message;throw e}
  }

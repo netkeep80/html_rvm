@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity,readDocumentDraft,readLocalJSON,networkPresentation} from "../site/unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceRanges,sourceIdentityAt,rangesForIdentity,readDocumentDraft,readLocalJSON,networkPresentation,sourceOccurrenceInfo,occurrenceIdentity,executionStepView,incomingAttachments,createImportCoordinator} from "../site/unified-session.js";
 import {stepNaturalJSON,executeNaturalJSON,subjectivateNaturalJSON,inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {serializeE1State,deserializeE1State,frameRoleSlot} from "../research/pc1/e1-witness.mjs";
 const env={version:"01.77",meta:{engine:"test"}};
@@ -149,4 +149,50 @@ test("distinct shared JSON member relations never occupy identical layout positi
  assert.equal(members.length,2);
  const positions=members.map(e=>JSON.stringify(v.positions.get("P:"+e.id)));
  assert.equal(new Set(positions).size,2);
+});
+
+test("P2-01: bounded source occurrences report truncation; typed result relation navigation",()=>{
+ const s=createUnifiedSession(JSON.stringify(Array.from({length:257},(_,i)=>i)));
+ const root=s.applied.state.mo.roots[0],members=[...s.applied.state.mo.relations].filter(([,r])=>r.owner.id===root.id&&r.label.kind==="index");
+ const n=members[0][1].target;
+ assert.equal(s.atomic(members.slice(1).map(([id])=>({op:"rebindRelation",id,target:n}))).outcome.status,"OK");
+ const info=sourceOccurrenceInfo(s.applied,s.appliedText,n);
+ assert.equal(info.ranges.length,256);assert.equal(info.truncated,true);
+ const p={sort:"P",id:members[0][0]};
+ assert.deepEqual(occurrenceIdentity(s.applied,root,[0],p),p);
+ assert.deepEqual(occurrenceIdentity(s.applied,root,[0],n),n);
+ assert.equal(occurrenceIdentity(s.applied,root,[1],p),null);
+ assert.equal(incomingAttachments(s.applied,n).length,257);
+});
+test("P2-01: visit budget is explicitly reported even with zero matching paths",()=>{
+ const s=createUnifiedSession(JSON.stringify(Array.from({length:4100},()=>0)));
+ const info=sourceOccurrenceInfo(s.applied,s.appliedText,{sort:"P",id:"absent"});
+ assert.equal(info.truncated,true);assert.equal(info.ranges.length,0);
+});
+test("P2-02: historical step owns source and actual output slot after reflective replay",()=>{
+ const s=createUnifiedSession(),first=s.run(env);
+ s.reflect(["$sub"],"R","is_null");const second=s.run(env);
+ const a=executionStepView(first,0),b=executionStepView(second,0);
+ assert.equal(a.event.controller,"is_string");assert.equal(b.event.controller,"is_null");
+ assert.equal(a.event.outputRole,"S");assert.equal(a.outputSlot,a.program.state.frames.get(a.event.frame).roles.S);
+ assert.ok(a.changed.some(e=>e.sort==="P"&&e.id===a.outputSlot));
+ assert.equal(JSON.parse(first.sourceText).$sub.$rel,"is_string");
+ assert.equal(JSON.parse(second.sourceText).$sub.$rel,"is_null");
+ assert.ok(sourceOccurrenceInfo(first.sourceProgram,first.sourceText,{sort:"P",id:a.event.sourceControllerSlot}).ranges.length);
+ assert.deepEqual(first.result,["4"]);assert.deepEqual(second.result,[null]);
+ assert.equal(s.history.length,3);
+});
+test("P2-03: latest import wins in both completion orders, cancellation and read failure",async()=>{
+ const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}};
+ for(const reverse of [false,true]){
+  const c=createImportCoordinator(),a=deferred(),b=deferred(),log=[];
+  const x=c.request(()=>a.promise,v=>log.push(v),e=>log.push(e.message));
+  const y=c.request(()=>b.promise,v=>log.push(v),e=>log.push(e.message));
+  if(reverse){b.resolve("B");await y;a.resolve("A")}else{a.resolve("A");await x;b.resolve("B")}
+  assert.equal(await x,"STALE");assert.equal(await y,"COMMITTED");assert.deepEqual(log,["B"]);
+ }
+ const c=createImportCoordinator(),a=deferred(),log=[];
+ const x=c.request(()=>a.promise,v=>log.push(v),e=>log.push(e.message));c.cancel();a.reject(Error("old"));assert.equal(await x,"STALE");
+ assert.equal(await c.request(()=>Promise.reject(Error("read failed")),v=>log.push(v),e=>log.push(e.message)),"REJECT");
+ assert.deepEqual(log,["read failed"]);
 });
