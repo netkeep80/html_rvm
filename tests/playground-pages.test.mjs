@@ -61,7 +61,7 @@ test("Pages artifact includes all modules, exact version marker and root redirec
   try {
     const out = join(temp, "dist");
     const commit = "a".repeat(40);
-    const result = buildPages(out, { commit, branch: "main", version: "01.04" });
+    const result = buildPages(out, { commit, branch: "main", version: "01.04", legacyRegression:true });
     assert.equal(result.files.length, 27);
     for (const path of ["site/unified-studio.html", "site/unified-studio.css", "site/unified-studio.js", "site/unified-session.js", "research/pc1/j1-natural-json.mjs", "research/pc1/e1-witness.mjs"]) assert.ok(result.files.includes(path), path);
     assert.ok(result.files.includes("site/mo-visual-graph.js"));
@@ -104,4 +104,19 @@ test("Browser JS parses as native modules without npm dependencies", () => {
     "site/app.js", "site/operations.js", "src/memory-document-provider.js",
     "src/strict-json.js", "src/working-session.js", "tools/build-pages.mjs", "tools/version.mjs", "tools/smoke-mo-v2.mjs", "tools/smoke-mo-v3.mjs", "site/mo-transition-observer.js", "site/unified-session.js", "site/unified-studio.js", "research/pc1/j1-natural-json.mjs"
   ]) assert.doesNotThrow(() => execFileSync(process.execPath, ["--check", resolve(root, path)]));
+});
+
+test("production Pages ships only the unified UI; legacy routes redirect",()=>{
+ const tmp=mkdtempSync(join(tmpdir(),"rvm-unified-pages-"));
+ try {
+  const out=join(tmp,"dist");
+  const result=buildPages(out,{version:"01.04",commit:"a".repeat(40),branch:"main"});
+  for(const path of ["index.html","site/index.html","site/mo-studio.html"]){
+   const content=readFileSync(join(out,path),"utf8");assert.match(content,/url=.*unified-studio\.html/);
+   assert.doesNotMatch(content,/JSON Lab|V3|mo-studio-ui\.js/);
+  }
+  for(const path of ["site/styles.css","site/app.js","site/operations.js","site/mo-studio.css","site/mo-studio.js","site/mo-studio-ui.js","site/mo-visual-graph.js","site/mo-transition-observer.js"])assert.equal(existsSync(join(out,path)),false,path);
+  for(const path of ["site/unified-studio.html","site/unified-session.js","site/mo-projection-sync.js","src/memory-document-provider.js","src/working-session.js","research/pc1/j1-natural-json.mjs","research/pc1/e1-witness.mjs"])assert.ok(result.files.includes(path),path);
+  for(const path of result.files)assert.ok(existsSync(join(out,path)),path);
+ }finally{rmSync(tmp,{recursive:true,force:true})}
 });

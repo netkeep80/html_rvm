@@ -21,7 +21,7 @@ const server=createServer(async(req,res)=>{
  }catch{res.writeHead(404);res.end();}
 });
 try{
- buildPages(root,{version:"01.07"});
+ buildPages(root,{version:"01.07",legacyRegression:true});
  await new Promise((ok,fail)=>{server.once("error",fail);server.listen(0,"127.0.0.1",ok);});
  const url="http://127.0.0.1:"+server.address().port+"/smoke.html";
  const exe=process.env.CHROME_BIN||"google-chrome";

@@ -25,3 +25,15 @@ relations:
     target: { kind: artifact, path: "tools/smoke-mo-unified.mjs" }
   - predicates: [ verified_by ]
     target: { kind: artifact, path: ".github/workflows/ci.yml" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "docs/UNIFIED-STUDIO-MIGRATION.md" }
+  - predicates: [ documents ]
+    target: { kind: artifact, path: "README.md" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-browser.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-visual.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-v2.mjs" }
+  - predicates: [ verified_by ]
+    target: { kind: artifact, path: "tools/smoke-mo-v3.mjs" }

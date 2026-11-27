@@ -15,7 +15,7 @@ let browser,ws;const sleep=ms=>new Promise(r=>setTimeout(r,ms));let n=0,captureR
 const check=(condition,name)=>{assert.ok(condition,name);console.log("V1 PASS",++n,name);};
 try{
  await mkdir(output,{recursive:true});
- buildPages(root,{version:"01.07",commit:head});
+ buildPages(root,{version:"01.07",commit:head,legacyRegression:true});
  await new Promise(r=>server.listen(0,"127.0.0.1",r));
  browser=spawn(process.env.CHROME_BIN||"google-chrome",["--headless=new","--no-sandbox","--disable-dev-shm-usage","--disable-background-networking","--no-first-run","--remote-debugging-port=0","--user-data-dir="+join(tmp,"chrome"),"about:blank"],{stdio:"ignore"});
  let port;for(let i=0;i<100;i++){try{port=(await readFile(join(tmp,"chrome","DevToolsActivePort"),"utf8")).split("\n")[0];break;}catch{await sleep(100);}}assert.ok(port,"Chromium DevTools port");

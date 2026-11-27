@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolveMainVersion } from "./version.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const staticFiles = [
+const regressionFiles = [
   "site/index.html", "site/styles.css", "site/app.js", "site/operations.js",
   "src/document-port-error.js", "src/strict-json.js",
   "src/memory-document-provider.js", "src/working-session.js",
@@ -23,6 +23,11 @@ export function buildPages(output = resolve(root, "dist"), metadata = {}) {
     throw Error("Pages destination must not overwrite the repository");
   }
   rmSync(destination, { recursive: true, force: true });
+  // Historical screens are packaged only for the retained regression harness,
+  // never by the production CLI. Public old routes are redirect stubs.
+  const legacy = metadata.legacyRegression === true;
+  const testOnly = new Set(["site/index.html","site/styles.css","site/app.js","site/operations.js","site/mo-studio.html","site/mo-studio.css","site/mo-studio.js","site/mo-studio-ui.js","site/mo-visual-graph.js","site/mo-transition-observer.js"]);
+  const staticFiles = legacy ? regressionFiles : regressionFiles.filter(file => !testOnly.has(file));
   for (const file of staticFiles) {
     const target = join(destination, file);
     mkdirSync(dirname(target), { recursive: true });
@@ -37,9 +42,18 @@ export function buildPages(output = resolve(root, "dist"), metadata = {}) {
   writeFileSync(join(destination, "site", "build-info.json"),
     JSON.stringify({ commit, branch: metadata.branch ?? "local", preview: true, version }) + "\n");
   writeFileSync(join(destination, "VERSION"), version + "\n");
-  writeFileSync(join(destination, "index.html"),
-    '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=./site/"><title>HTML RVM — JSON Lab</title></head><body><a href="./site/">Открыть HTML RVM JSON Lab</a></body></html>\n');
-  return { destination, files: [...staticFiles, "site/build-info.json", "VERSION", "index.html"] };
+  function redirect(url) {
+    return '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url='+url+'"><title>HTML RVM — MO Studio</title></head><body><a href="'+url+'">Открыть MO Studio</a></body></html>\n';
+  }
+  const routes = [];
+  if (!legacy) {
+    for (const name of ["site/index.html","site/mo-studio.html"]) {
+      writeFileSync(join(destination,name),redirect("./unified-studio.html"));
+      routes.push(name);
+    }
+  }
+  writeFileSync(join(destination,"index.html"),redirect(legacy?"./site/":"./site/unified-studio.html"));
+  return {destination,files:[...staticFiles,...routes,"site/build-info.json","VERSION","index.html"]};
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
