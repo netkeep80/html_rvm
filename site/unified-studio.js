@@ -1,8 +1,9 @@
-import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,rangesForIdentity,readLocalJSON,networkPresentation} from "./unified-session.js";
+import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,sourceOccurrenceInfo,occurrenceIdentity,incomingAttachments,executionStepView,createImportCoordinator,readLocalJSON,networkPresentation} from "./unified-session.js";
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
 let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null,zoom=1,creation=null;
+const importer=createImportCoordinator(), historical=$("historical-source");
 const source=$("source"),svg=$("network"),ns="http://www.w3.org/2000/svg",json=x=>JSON.stringify(x,null,2);
 const key=e=>e.sort+":"+e.id, endpoint=k=>({sort:k[0],id:k.slice(2)});
 function el(tag,attrs={},text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;return e}
@@ -11,11 +12,20 @@ function choose(k,highlight=true){
  if(creation){act(()=>{if(!creation.begin){creation.begin=endpoint(k);return}const c=session.createRelation(creation.begin,endpoint(k));creation=null;if(c.transition.outcome.status==="OK"){syncText();selected=key(c.identity)}});return}
  selected=k;render();if(highlight)highlightSource()
 }
+function sourceOwner(){return viewRun?{program:viewRun.sourceProgram,text:viewRun.sourceText,editor:historical}:session.dirty?null:{program:session.applied,text:session.appliedText,editor:source}}
 function highlightSource(){
- if(!selected||view||session.dirty||session.appliedText===null)return;
- const ranges=rangesForIdentity(session.applied,session.appliedText,endpoint(selected));
- if(ranges.length){const x=ranges[0];source.setSelectionRange(x.start,x.end)}
+ if(!selected)return;const owner=sourceOwner();if(!owner||owner.text===null)return;
+ const x=sourceOccurrenceInfo(owner.program,owner.text,endpoint(selected)).ranges[0];
+ if(x)owner.editor.setSelectionRange(x.start,x.end);
 }
+function currentRun(){return session.running?{sourceProgram:session.applied,sourceText:session.appliedText,snapshots:session.tentative,events:session.tentative.map(x=>x.event),mode:"CALL",tentative:true}:session.branch}
+function selectStep(run,index){
+ creation=null;viewRun=run;const step=executionStepView(run,index);view=step.program;viewEvent=step.event;frame=step.event.frame;
+ selected="P:"+(step.outputSlot??step.event.runtimeRSlot);
+ $("transition-detail").textContent=json({observation:step.event,trace:step.trace,changed:step.changed});
+ render();if(step.event.sourceControllerSlot){const owner=sourceOwner(),x=sourceOccurrenceInfo(owner.program,owner.text,{sort:"P",id:step.event.sourceControllerSlot}).ranges[0];if(x)owner.editor.setSelectionRange(x.start,x.end)}
+}
+
 function network(program,roles={},sourceController=null,resultEndpoint=null){
  const plan=networkPresentation(program,{applied:view?null:session.applied,roles,sourceController,resultEndpoint,selected:selected?endpoint(selected):null,all:$("network-scope").value==="all"});
  const records=plan.records,pos=new Map(plan.positions);
@@ -46,11 +56,13 @@ function network(program,roles={},sourceController=null,resultEndpoint=null){
  }
 }
 function render(){
- const p=view??session.visible,state=p.state,events=session.running?session.tentative.map(x=>x.event):session.branch?.events??[];
+ const p=view??session.visible,state=p.state,ownerRun=viewRun??currentRun(),events=ownerRun?.events??[];
  const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
- source.disabled=session.running;source.placeholder=session.projectionDiagnostic??"";
- $("projection-note").textContent=view?"Историческое состояние; исходный редактор показывает текущую применённую модель":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":session.projectionPartial?"JSON — частичная проекция МО. Точная модель: Export exact.":"Выбор ключа → отношение; выбор значения → payload";
+ source.disabled=session.running||!!viewRun;source.placeholder=session.projectionDiagnostic??"";
+ source.hidden=!!viewRun;historical.hidden=!viewRun;if(viewRun&&historical.value!==(viewRun.sourceText??""))historical.value=viewRun.sourceText??"";
+ $("return-current").hidden=!viewRun;$("mode").textContent=ownerRun?.mode??(session.lastReject?.kind==="run"?"REJECT":"—");
+ $("projection-note").textContent=viewRun?"Снимок исходной метапрограммы выбранного исполнения (read-only)":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":session.projectionPartial?"JSON — частичная проекция МО. Точная модель: Export exact.":"Выбор ключа → отношение; выбор значения → payload";
  for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
  $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
  $("inspect").disabled=session.running||session.dirty||!session.executable;
@@ -63,28 +75,34 @@ function render(){
  $("cancel-create").hidden=!creation;$("create-note").textContent=creation?(creation.begin?"Выберите конец нового дуплета":"Выберите начало нового дуплета"):"";
  $("import-json").disabled=session.running||session.dirty;$("export-json").disabled=session.appliedText===null;
  $("import-exact").disabled=session.running||session.dirty;
- network(p,f?.roles,active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
+ network(p,f?.roles,active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,viewEvent?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)).resultEndpoint:(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";
  $("role-cards").replaceChildren();if(f){for(const [role,id] of Object.entries(f.roles)){const b=document.createElement("button");b.textContent=role;b.title=id;b.dataset.alias=String(Object.values(f.roles).filter(x=>x===id).length>1);b.onclick=()=>choose("P:"+id);$("role-cards").append(b)}}
  $("last-reject").textContent=session.lastReject?"REJECT · "+session.lastReject.diagnostic+" · committed state unchanged":"";
- const resultRun=viewRun??session.branch;
+ const resultRun=ownerRun&&!ownerRun.tentative?ownerRun:null;
+ const step=viewEvent&&viewRun?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)):null;
  $("result").textContent=viewEvent?json(viewEvent.result):resultRun?json(resultRun.result):session.running?"Предварительное осуществление":"—";
  $("exact").textContent=session.lossless();
+ $("incoming").replaceChildren();if(ep)for(const a of incomingAttachments(p,ep)){const btn=document.createElement("button");btn.textContent=a.side+" ← "+key(a.identity);btn.onclick=()=>choose(key(a.identity));$("incoming").append(btn)}
+ $("step-identities").replaceChildren();if(step){const ids=[["Source controller",step.event.sourceControllerSlot],["Runtime R",step.event.runtimeRSlot],["Output "+step.event.outputRole,step.outputSlot]];for(const [label,id] of ids){if(!id)continue;const btn=document.createElement("button");btn.textContent=label;btn.dataset.identity="P:"+id;btn.onclick=()=>choose("P:"+id);$("step-identities").append(btn)}for(const e of step.changed){const btn=document.createElement("button");btn.textContent=e.kind+" "+key(e);btn.disabled=e.kind==="dead";btn.onclick=()=>choose(key(e));$("step-identities").append(btn)}}
  $("occurrences").replaceChildren();$("result-occurrences").replaceChildren();
- if(ep&&!view&&!session.dirty&&session.appliedText!==null){for(const x of rangesForIdentity(session.applied,session.appliedText,ep)){const b=document.createElement("button");b.textContent=json(x.path);b.onclick=()=>source.setSelectionRange(x.start,x.end);$("occurrences").append(b)}}
- if(ep&&resultRun&&!viewEvent){const v=projectionOccurrences(resultRun.program.state.mo,resultRun.resultEndpoint,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=locateVPath(resultRun.program.state.mo,resultRun.resultEndpoint,path);if(q.ok)choose(key(q.node))};$("result-occurrences").append(b)}}
+ function bounded(container,info){if(info.truncated||info.diagnostic){const note=document.createElement("span");note.className="occurrence-warning";note.textContent=info.truncated?"Неполный список: достигнут предел 256 путей / 4096 посещений. "+(info.diagnostic??""):info.diagnostic;container.append(note)}}
+ const own=sourceOwner();
+ if(ep&&own&&own.text!==null){const info=sourceOccurrenceInfo(own.program,own.text,ep);for(const x of info.ranges){const b=document.createElement("button");b.textContent=json(x.path);b.onclick=()=>own.editor.setSelectionRange(x.start,x.end);$("occurrences").append(b)}bounded($("occurrences"),info)}
+ const resultProgram=step?.program??resultRun?.program,resultRoot=step?.resultEndpoint??resultRun?.resultEndpoint;
+ if(ep&&resultProgram&&resultRoot){const v=projectionOccurrences(resultProgram.state.mo,resultRoot,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=occurrenceIdentity(resultProgram,resultRoot,path,ep);if(q)choose(key(q))};$("result-occurrences").append(b)}bounded($("result-occurrences"),v)}
  $("timeline").replaceChildren();
- for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;viewEvent=e;viewRun=null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json({observation:e,trace:snapshots.find(x=>x.event===e)?.trace??[]});render()};$("timeline").append(b)}
+ for(const [index,e] of events.entries()){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(!!ownerRun.tentative);b.dataset.step=String(index);b.onclick=()=>selectStep(ownerRun,index);$("timeline").append(b)}
  let runNo=0;
  for(const entry of session.history){const b=document.createElement("button");
-  if(entry.kind==="run"){const run=entry.run;b.textContent="Run "+(++runNo)+": "+json(run.result);b.onclick=()=>{creation=null;view=run.program;viewRun=run;viewEvent=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()}}
+  if(entry.kind==="run"){const run=entry.run;b.textContent="Run "+(++runNo)+": "+json(run.result);b.onclick=()=>{creation=null;view=run.program;viewRun=run;viewEvent=null;selected=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()}}
   else{b.textContent=entry.kind==="Q"?"Q: reflection":entry.actions.map(x=>x.op).join(", ");b.onclick=()=>{$("transition-detail").textContent=json(entry)}}
   $("timeline").append(b)
  }
 
 }
-function act(fn){try{fn();render()}catch(e){render();$("status").textContent=e.message}}
+function act(fn){importer.cancel();if($("import-status").textContent.startsWith("Чтение "))$("import-status").textContent="Импорт отменён изменением сеанса";try{fn();render()}catch(e){render();$("status").textContent=e.message}}
 function clearView(){creation=null;view=null;viewEvent=null;viewRun=null;frame=null;$("transition-detail").textContent=""}
 function syncText(){source.value=session.draft??""}
 svg.addEventListener("pointerdown",ev=>{if(ev.button!==0)return;const g=ev.target.closest("[data-identity]");if(!g)return;const k=g.dataset.identity,p=coord(ev),side=ev.target.dataset.socket;gesture={k,side,start:p,base:session.layout.get(k)??{x:g.transform.baseVal.getItem(0).matrix.e,y:g.transform.baseVal.getItem(0).matrix.f}};svg.setPointerCapture(ev.pointerId);ev.preventDefault()});
@@ -96,8 +114,9 @@ $("example").value="where";syncText();
 let example="where";
 $("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросить черновик?")){$("example").value=example;return}example=$("example").value;session=examples[example]===null?createUnifiedSession(null,{model:mathematicalExample(example)}):createUnifiedSession(examples[example]);syncText();selected=null;clearView()});
 source.oninput=()=>act(()=>session.edit(source.value));
-function selectSource(){if(!session.dirty&&session.appliedText!==null){const e=sourceIdentityAt(session.applied,session.appliedText,source.selectionStart);if(e)choose(key(e),false)}}
-source.addEventListener("click",selectSource);source.addEventListener("keyup",selectSource);
+function selectSource(){const owner=sourceOwner();if(owner&&owner.text!==null){const e=sourceIdentityAt(owner.program,owner.text,owner.editor.selectionStart);if(e)choose(key(e),false)}}
+for(const editor of [source,historical]){editor.addEventListener("click",selectSource);editor.addEventListener("keyup",selectSource)}
+$("return-current").onclick=()=>act(()=>{clearView();selected=null});
 $("apply").onclick=()=>act(()=>{if(session.projectionPartial&&!confirm("Apply заново субъективирует JSON. Дополнительные отношения и текущие идентичности не сохраняются. Продолжить?"))return;if(session.apply()){selected=null;clearView()}});
 $("discard").onclick=()=>act(()=>{session.discard();syncText()});
 $("reset").onclick=()=>act(()=>{session.reset();clearView()});
@@ -113,16 +132,28 @@ $("reflect").onclick=()=>act(()=>{const c=inspectNaturalEntity(session.applied,[
 function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),0)}
 $("export-exact").onclick=()=>download(session.lossless(),"mo-exact.json");
 $("export-json").onclick=()=>act(()=>{if(session.projectionPartial&&!confirm("Экспорт JSON сохраняет значения, но не все идентичности и отношения. Продолжить?"))return;download(session.exportSource(),"natural.json")});
-$("import-json").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session,base=owner.applied;try{
- const text=await readLocalJSON(await file.text());if(owner!==session||base!==owner.applied)return;
- act(()=>{session.stageDocument(text);syncText();clearView()})
- }catch(err){$("status").textContent=err.message}finally{e.target.value=""}};
+function importFile(event,exact){
+ const input=event.target,file=input.files[0];input.value="";if(!file)return;
+ const owner=session,base=owner.applied,draft=owner.draft;
+ $("import-status").textContent="Чтение "+file.name;
+ return importer.request(async()=>{const text=await file.text();return exact?text:await readLocalJSON(text)},text=>{
+  if(owner!==session||base!==owner.applied||draft!==owner.draft||session.running){$("import-status").textContent="Импорт отменён изменением сеанса";return}
+  const ok=exact?session.importExact(text):session.stageDocument(text);
+  if(ok){syncText();selected=null;clearView()}
+  render();$("import-status").textContent=ok?"Импортирован "+file.name:"REJECT · "+session.diagnostic;
+ },err=>{$("import-status").textContent="REJECT · "+err.message});
+}
+$("import-json").onchange=e=>importFile(e,false);
 $("new-atom").onclick=()=>act(()=>{const text=prompt("JSON scalar","null");if(text===null)return;const c=session.createAtom(JSON.parse(text));if(c.transition.outcome.status==="OK"){syncText();selected=key(c.identity)}});
 $("new-relation").onclick=()=>act(()=>{creation={begin:null}});
 $("cancel-create").onclick=()=>act(()=>{creation=null});
 $("delete-identity").onclick=()=>act(()=>{if(selected&&confirm("Удалить "+selected+"?")){const t=session.remove(endpoint(selected));if(t.outcome.status==="OK"){selected=null;syncText()}}});
 $("advanced-apply").onclick=()=>act(()=>{const t=session.atomic(JSON.parse($("advanced-actions").value));if(t.outcome.status==="OK"){syncText();selected=null;clearView()}});
 
-$("import-exact").onchange=async e=>{const file=e.target.files[0];if(!file)return;const owner=session,base=owner.applied;try{const text=await file.text();if(owner!==session||base!==owner.applied)return;act(()=>{if(session.importExact(text)){syncText();selected=null;clearView()}})}finally{e.target.value=""}};
+$("import-exact").onchange=e=>importFile(e,true);
+$("cancel-import").onclick=()=>{importer.cancel();$("import-status").textContent="Импорт отменён"};
+function selectTab(name){document.body.dataset.tab=name;for(const b of document.querySelectorAll("[data-tab-button]"))b.setAttribute("aria-selected",String(b.dataset.tabButton===name));render()}
+for(const b of document.querySelectorAll("[data-tab-button]"))b.onclick=()=>selectTab(b.dataset.tabButton);
+
 render();
 fetch("./build-info.json").then(r=>{if(!r.ok)throw Error("build metadata");return r.json()}).then(m=>{if(!/^[0-9]{2}\.[0-9]{2}$/.test(m.version))throw Error("invalid version");version=m.version;$("version").textContent=version;render()}).catch(()=>{$("version").textContent="Нет build-info · Run/Step недоступны"});
