@@ -2,7 +2,7 @@ import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,range
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
-let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,gesture=null;
+let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null;
 const source=$("source"),svg=$("network"),ns="http://www.w3.org/2000/svg",json=x=>JSON.stringify(x,null,2);
 const key=e=>e.sort+":"+e.id, endpoint=k=>({sort:k[0],id:k.slice(2)});
 function el(tag,attrs={},text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;return e}
@@ -41,7 +41,7 @@ function network(program,roles={}){
 }
 function render(){
  const p=view??session.visible,state=p.state,events=session.running?session.tentative.map(x=>x.event):session.branch?.events??[];
- const active=events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
+ const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
  source.disabled=session.running;source.placeholder=session.projectionDiagnostic??"";
  $("projection-note").textContent=session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":"Выбор ключа → отношение; выбор значения → payload";
@@ -50,32 +50,35 @@ function render(){
  $("inspect").disabled=session.running||session.dirty||!session.executable;
  let predicate=false;try{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;predicate=c==="is_string"||c==="is_null"}catch{}
  $("reflect").disabled=session.running||session.dirty||!session.executable||!predicate;
+ $("apply").disabled=session.running||!session.dirty;
  network(p,f?.roles);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";
- $("result").textContent=session.branch?json(session.branch.result):session.running?"Предварительное осуществление":"—";
+ const resultRun=viewRun??session.branch;
+ $("result").textContent=viewEvent?json(viewEvent.result):resultRun?json(resultRun.result):session.running?"Предварительное осуществление":"—";
  $("exact").textContent=session.lossless();
  $("occurrences").replaceChildren();$("result-occurrences").replaceChildren();
  if(ep&&!session.dirty&&session.appliedText!==null){for(const x of rangesForIdentity(session.applied,session.appliedText,ep)){const b=document.createElement("button");b.textContent=json(x.path);b.onclick=()=>source.setSelectionRange(x.start,x.end);$("occurrences").append(b)}}
- if(ep&&session.branch){const v=projectionOccurrences(session.branch.program.state.mo,session.branch.resultEndpoint,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=locateVPath(session.branch.program.state.mo,session.branch.resultEndpoint,path);if(q.ok)choose(key(q.node))};$("result-occurrences").append(b)}}
+ if(ep&&resultRun&&!viewEvent){const v=projectionOccurrences(resultRun.program.state.mo,resultRun.resultEndpoint,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=locateVPath(resultRun.program.state.mo,resultRun.resultEndpoint,path);if(q.ok)choose(key(q.node))};$("result-occurrences").append(b)}}
  $("timeline").replaceChildren();
- for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json(e);render()};$("timeline").append(b)}
- for(const [i,run] of session.runs.entries()){const b=document.createElement("button");b.textContent="Run "+(i+1)+": "+json(run.result);b.onclick=()=>{view=run.program;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json(run.events);render()};$("timeline").append(b)}
+ for(const e of events){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(session.running);b.onclick=()=>{frame=e.frame;const snapshots=session.running?session.tentative:session.branch.snapshots;view=snapshots.find(x=>x.event===e)?.program??null;viewEvent=e;viewRun=null;selected="P:"+e.runtimeRSlot;$("transition-detail").textContent=json(e);render()};$("timeline").append(b)}
+ for(const [i,run] of session.runs.entries()){const b=document.createElement("button");b.textContent="Run "+(i+1)+": "+json(run.result);b.onclick=()=>{view=run.program;viewRun=run;viewEvent=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json(run.events);render()};$("timeline").append(b)}
  for(const e of session.edits){const b=document.createElement("button");b.textContent=e.kind==="Q"?"Q: reflection":e.action.op;b.onclick=()=>{$("transition-detail").textContent=json(e)};$("timeline").append(b)}
 }
 function act(fn){try{fn();render()}catch(e){render();$("status").textContent=e.message}}
-function clearView(){view=null;frame=null}
+function clearView(){view=null;viewEvent=null;viewRun=null;frame=null;$("transition-detail").textContent=""}
 function syncText(){source.value=session.draft??""}
 svg.addEventListener("pointerdown",ev=>{if(ev.button!==0)return;const g=ev.target.closest("[data-identity]");if(!g)return;const k=g.dataset.identity,p=coord(ev),side=ev.target.dataset.socket;gesture={k,side,start:p,base:session.layout.get(k)??{x:g.transform.baseVal.getItem(0).matrix.e,y:g.transform.baseVal.getItem(0).matrix.f}};svg.setPointerCapture(ev.pointerId);ev.preventDefault()});
 svg.addEventListener("pointermove",ev=>{if(!gesture)return;const p=coord(ev);if(Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<5&&!gesture.moved)return;gesture.moved=true;if(gesture.side){gesture.line?.remove();gesture.line=el("line",{x1:gesture.start.x,y1:gesture.start.y,x2:p.x,y2:p.y,stroke:"#f7d17b","stroke-width":2,"pointer-events":"none"});svg.append(gesture.line)}else{session.layout.set(gesture.k,{x:Math.max(50,gesture.base.x+p.x-gesture.start.x),y:Math.max(30,gesture.base.y+p.y-gesture.start.y)});render()}});
-svg.addEventListener("pointerup",ev=>{if(!gesture)return;const g=gesture;gesture=null;g.line?.remove();if(!g.moved){choose(g.k);return}if(!g.side)return;const target=document.elementFromPoint(ev.clientX,ev.clientY)?.closest("[data-anchor]")?.dataset.anchor;if(!target)return;act(()=>{if(view||session.running||session.dirty)throw Error("Edit only applied model; reset or apply first");const a=endpoint(g.k),b=endpoint(target);if(!session.applied.state.mo.relations.has(a.id)||!(b.sort==="P"?session.applied.state.mo.relations:session.applied.state.mo.nodes).has(b.id))throw Error("Runtime-only identity cannot edit applied model");const r=session.applied.state.mo.relations.get(a.id);if(!confirm(g.side+": "+key(r[g.side==="B"?"owner":"target"]??a)+" → "+target))return;const t=session.endpoint(a.id,g.side,b);if(t.outcome.status==="OK"){syncText();clearView();selected=g.k}})});
+svg.addEventListener("pointerup",ev=>{if(!gesture)return;const g=gesture;gesture=null;g.line?.remove();if(!g.moved){choose(g.k);return}if(!g.side)return;const target=document.elementFromPoint(ev.clientX,ev.clientY)?.closest("[data-anchor]")?.dataset.anchor;if(!target)return;act(()=>{if(view||session.running||session.dirty||session.branch||session.inspection)throw Error("Edit only applied model; reset or apply first");const a=endpoint(g.k),b=endpoint(target);if(!session.applied.state.mo.relations.has(a.id)||!(b.sort==="P"?session.applied.state.mo.relations:session.applied.state.mo.nodes).has(b.id))throw Error("Runtime-only identity cannot edit applied model");const r=session.applied.state.mo.relations.get(a.id);if(!confirm(g.side+": "+key(r[g.side==="B"?"owner":"target"]??a)+" → "+target))return;const t=session.endpoint(a.id,g.side,b);if(t.outcome.status==="OK"){syncText();clearView();selected=g.k}})});
 svg.addEventListener("pointercancel",()=>{gesture?.line?.remove();gesture=null;render()});
 for(const name of Object.keys(examples)){const o=document.createElement("option");o.value=name;o.textContent=name;$("example").append(o)}
 $("example").value="where";syncText();
 let example="where";
 $("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросить черновик?")){$("example").value=example;return}example=$("example").value;session=examples[example]===null?createUnifiedSession(null,{model:mathematicalExample(example)}):createUnifiedSession(examples[example]);syncText();selected=null;clearView()});
 source.oninput=()=>act(()=>session.edit(source.value));
-source.addEventListener("click",()=>{if(!session.dirty&&session.appliedText!==null){const e=sourceIdentityAt(session.applied,session.appliedText,source.selectionStart);if(e)choose(key(e),false)}});
+function selectSource(){if(!session.dirty&&session.appliedText!==null){const e=sourceIdentityAt(session.applied,session.appliedText,source.selectionStart);if(e)choose(key(e),false)}}
+source.addEventListener("click",selectSource);source.addEventListener("keyup",selectSource);
 $("apply").onclick=()=>act(()=>{if(session.apply()){selected=null;clearView()}});
 $("discard").onclick=()=>act(()=>{session.discard();syncText()});
 $("reset").onclick=()=>act(()=>{session.reset();clearView()});

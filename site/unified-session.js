@@ -67,7 +67,7 @@ export function rangesForIdentity(program,text,identity){
  const paths=new Set(v.paths.map(x=>JSON.stringify(x)));
  return sourceRanges(text).filter(x=>paths.has(JSON.stringify(x.path)));
 }
-function parseSource(text){const value=cloneStrictJSON(JSON.parse(text));sourceRanges(text);return subjectivateNaturalJSON(value)}
+function parseSource(text){if(typeof text!=="string")throw Error("No Natural JSON source");const value=cloneStrictJSON(JSON.parse(text));sourceRanges(text);return subjectivateNaturalJSON(value)}
 export function createUnifiedSession(text = examples.where,{model=null}={}) {
  let applied=model??parseSource(text),appliedText=model?null:text,draft=appliedText;
  let branch=null,attempt=null,tentative=[],diagnostic=null,inspection=null,projectionDiagnostic=model?"MATHEMATICAL_EXAMPLE":null;
