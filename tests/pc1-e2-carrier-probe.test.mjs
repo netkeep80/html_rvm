@@ -570,7 +570,14 @@ test("E2-R2 correspondence W3 — separated/aliased role carriers agree across B
   assert.deepEqual(cObs,bObs);
 });
 
-test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree across B/A/C", () => {
+test("E2-R3 correspondence W4 — enriched frames and full H/V identity observations agree across B/A/C", () => {
+  const normB = trace => trace.map(e => e.op==="H"
+    ? {op:e.op,from:e.from,to:e.to,path:e.path,routed:"D:"+e.routed}
+    : {op:e.op,from:e.from,to:e.to,modelSlot:"D:"+e.modelSlot,O:"D:"+e.O,S:"D:"+e.S});
+  const normA = trace => trace.map(e => e.op==="H"
+    ? {op:e.op,from:e.from,to:e.to,path:e.path,routed:"D:"+e.routed}
+    : {op:e.op,from:e.from,to:e.to,modelSlot:"D:"+e.modelSlot,O:"D:"+e.O,S:"D:"+e.S});
+
   let b=createE1State();
   for(const id of ["slots","A"]) b=bNode(b,id);
   for(const id of ["root","oldModel","M1"]) b=bNode(b,id,"object");
@@ -582,9 +589,16 @@ test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree
   const bv=BV(b,{frame:"C0",modelSlot:"modelSlot",id:"CV"}); b=bv.state;
   const bvh=BH(b,{frame:"CV",path:"$rel/a",id:"CVH"}); b=bvh.state;
   const bTrace=[...bh.trace,...bhv.trace,...bv.trace,...bvh.trace];
-  const bObs={sameR:endpointName(bFrameRE(b,"CHV").R)===endpointName(bFrameRE(b,"CVH").R),sameE:endpointName(bFrameRE(b,"CHV").E)===endpointName(bFrameRE(b,"CVH").E),
-    depths:[bFrameDepth(b,"CHV"),bFrameDepth(b,"CVH")],parentsDistinct:b.frames.get("CHV").parent!==b.frames.get("CVH").parent,
-    O:["D:aSlot","D:rootSlot"],traceOps:bTrace.map(x=>x.op),traceRoundtrip:deserializeE1Record(serializeE1Record(b,bTrace)).trace.length===4};
+  const bDecoded=deserializeE1Record(serializeE1Record(b,bTrace));
+  const bObs={
+    sameR:endpointName(bFrameRE(b,"CHV").R)===endpointName(bFrameRE(b,"CVH").R),
+    sameE:endpointName(bFrameRE(b,"CHV").E)===endpointName(bFrameRE(b,"CVH").E),
+    depths:[bFrameDepth(b,"CHV"),bFrameDepth(b,"CVH")],
+    parents:[b.frames.get("CHV").parent,b.frames.get("CVH").parent],
+    O:["D:"+bFrameRoleSlot(b,"CHV","O").id,"D:"+bFrameRoleSlot(b,"CVH","O").id],
+    trace:normB(bTrace),
+    decodedTrace:normB(bDecoded.trace)
+  };
 
   const a=new JsonNearCarrier();
   const as=a.atom("slots",{}), A=a.atom("A"), root=a.atom("root",{}), old=a.atom("oldModel",{}), m1=a.atom("M1",{});
@@ -593,9 +607,16 @@ test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree
   const a0=a.createFrame("C0",{E:aos,O:ars,R:ars,S:ars});
   const ah=a.HObserved(a0,"$rel/a","CH"), ahv=a.VObserved(ah.frame,ams,"CHV"), av=a.VObserved(a0,ams,"CV"), avh=a.HObserved(av.frame,"$rel/a","CVH");
   const at=[...ah.trace,...ahv.trace,...av.trace,...avh.trace];
-  const aObs={sameR:a.roleValue(ahv.frame,"R")===a.roleValue(avh.frame,"R"),sameE:a.roleValue(ahv.frame,"E")===a.roleValue(avh.frame,"E"),
-    depths:[a.depth(ahv.frame),a.depth(avh.frame)],parentsDistinct:ahv.frame.parent!==avh.frame.parent,O:["D:"+a.roleSlot(ahv.frame,"O").id,"D:"+a.roleSlot(avh.frame,"O").id],
-    traceOps:at.map(x=>x.op),traceRoundtrip:JsonNearCarrier.deserializeRecord(a.serializeRecord(at)).trace.length===4};
+  const adec=JsonNearCarrier.deserializeRecord(a.serializeRecord(at));
+  const aObs={
+    sameR:a.roleValue(ahv.frame,"R")===a.roleValue(avh.frame,"R"),
+    sameE:a.roleValue(ahv.frame,"E")===a.roleValue(avh.frame,"E"),
+    depths:[a.depth(ahv.frame),a.depth(avh.frame)],
+    parents:[ahv.frame.parent.id,avh.frame.parent.id],
+    O:["D:"+a.roleSlot(ahv.frame,"O").id,"D:"+a.roleSlot(avh.frame,"O").id],
+    trace:normA(at),
+    decodedTrace:normA(adec.trace)
+  };
 
   const c=new DupletArrayCarrier();
   const cs=c.atom("slots"), cA=c.atom("A"), cr=c.atom({}), co=c.atom({}), cm=c.atom({});
@@ -604,10 +625,23 @@ test("E2-R2 correspondence W4 — enriched frames plus H/V identity traces agree
   const c0=c.createFrame({E:cos,O:crs,R:crs,S:crs});
   const ch=c.HObserved(c0,"$rel/a"), chv=c.VObserved(ch.frame,cms), cvv=c.VObserved(c0,cms), cvh=c.HObserved(cvv.frame,"$rel/a");
   const ct=[...ch.trace,...chv.trace,...cvv.trace,...cvh.trace];
-  const cmap=cNames(c,{aSlot:cas,rootSlot:crs});
-  const cObs={sameR:c.roleValue(chv.frame,"R")===c.roleValue(cvh.frame,"R"),sameE:c.roleValue(chv.frame,"E")===c.roleValue(cvh.frame,"E"),
-    depths:[c.depth(chv.frame),c.depth(cvh.frame)],parentsDistinct:c.parent(chv.frame)!==c.parent(cvh.frame),O:[cmap(c.roleSlot(chv.frame,"O")),cmap(c.roleSlot(cvh.frame,"O"))],
-    traceOps:ct.map(x=>x.op),traceRoundtrip:DupletArrayCarrier.deserializeRecord(c.serializeRecord(ct)).trace.length===4};
+  const frameNames=new Map([[c0,"C0"],[ch.frame,"CH"],[chv.frame,"CHV"],[cvv.frame,"CV"],[cvh.frame,"CVH"]]);
+  const slotNames=new Map([[crs,"rootSlot"],[cos,"oldModelSlot"],[cms,"modelSlot"],[cas,"aSlot"]]);
+  const cf=id => frameNames.get(id) ?? (()=>{throw new Error("unmapped C frame "+id)})();
+  const csn=id => "D:"+(slotNames.get(id) ?? (()=>{throw new Error("unmapped C slot "+id)})());
+  const normC = trace => trace.map(e => e.op==="H"
+    ? {op:e.op,from:cf(e.from),to:cf(e.to),path:e.path,routed:csn(e.routed)}
+    : {op:e.op,from:cf(e.from),to:cf(e.to),modelSlot:csn(e.modelSlot),O:csn(e.O),S:csn(e.S)});
+  const cdec=DupletArrayCarrier.deserializeRecord(c.serializeRecord(ct));
+  const cObs={
+    sameR:c.roleValue(chv.frame,"R")===c.roleValue(cvh.frame,"R"),
+    sameE:c.roleValue(chv.frame,"E")===c.roleValue(cvh.frame,"E"),
+    depths:[c.depth(chv.frame),c.depth(cvh.frame)],
+    parents:[cf(c.parent(chv.frame)),cf(c.parent(cvh.frame))],
+    O:[csn(c.roleSlot(chv.frame,"O")),csn(c.roleSlot(cvh.frame,"O"))],
+    trace:normC(ct),
+    decodedTrace:normC(cdec.trace)
+  };
   assert.deepEqual(aObs,bObs);
   assert.deepEqual(cObs,bObs);
 });
@@ -625,7 +659,13 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   const bCommute=serializeLosslessMO(bab.state.mo)===serializeLosslessMO(bba.state.mo);
   b=bMustTransition(BH(b,{frame:"C0",path:"$rel/x",id:"HRX"})); b=bMustTransition(BH(b,{frame:"C0",path:"$obj/x",id:"HOX"}));
   const bBefore=serializeE1State(b), bconf=bCommitBranchWrites(b,[{frame:"HRX",target:N("one")},{frame:"HOX",target:N("two")}]);
-  const bObs={classify:bClassifyBranchWrites(b,bd).status,commute:bCommute,final:["A:one","A:two"],conflict:bconf.outcome.status,unchanged:serializeE1State(bconf.state)===bBefore};
+  const bObs={
+    classify:bClassifyBranchWrites(b,bd).status,
+    commute:bCommute,
+    final:[endpointName(bFrameRoleValue(bab.state,"HA","R")),endpointName(bFrameRoleValue(bab.state,"HB","R"))],
+    conflict:bconf.outcome.status,
+    unchanged:serializeE1State(bconf.state)===bBefore
+  };
 
   const makeA=()=>{
     const a=new JsonNearCarrier(), slots=a.atom("slots",{}), one=a.atom("one"), two=a.atom("two"), zero=a.atom("zero"), root=a.atom("root",{});
@@ -664,7 +704,17 @@ test("E2-R2 correspondence W5 — disjoint commutation and same-slot conflict ag
   assert.equal(ac1.status,"OK"); assert.equal(ac2.status,"OK");
 });
 
-test("E2-R2 correspondence W6 — Q order, no-op semanticChange, runtime failure and cyclic trace roundtrip agree across B/A/C", () => {
+test("E2-R3 correspondence W6 — full Q identity/outcome traces and decoded observations agree across B/A/C", () => {
+  const normBTrace = trace => trace.map(e=>({
+    index:e.index,op:e.op,role:e.role,slot:"D:"+e.slot,target:endpointName(e.target),
+    outcome:{status:e.outcome.status,diagnostic:e.outcome.diagnostic??null,semanticChange:e.outcome.semanticChange}
+  }));
+  const normATrace = trace => trace.map(e=>({
+    index:e.index,op:e.op,role:e.role,slot:"D:"+e.slot,
+    target:(e.target.kind==="atom"?"A:":"D:")+e.target.id,
+    outcome:{status:e.outcome.status,diagnostic:e.outcome.diagnostic??null,semanticChange:e.outcome.semanticChange}
+  }));
+
   let b=createE1State();
   for(const id of ["slots","zero","one","two"]) b=bNode(b,id);
   b=bSlot(b,"rSlot",N("slots"),N("zero"));
@@ -673,7 +723,14 @@ test("E2-R2 correspondence W6 — Q order, no-op semanticChange, runtime failure
   const bf=BQ(b,{frame:"F",steps:[{op:"rebindRole",role:"R",target:N("one")},{op:"rebindRole",role:"R",target:N("missing")},{op:"rebindRole",role:"R",target:N("two")}]});
   const bc=BQ(b,{frame:"F",steps:[{op:"rebindRole",role:"R",target:P("rSlot")}]});
   const bRec=deserializeE1Record(serializeE1Record(bc.state,bc.trace));
-  const bObs={repeat:traceStatuses(br.trace),changes:traceChanges(br.trace),failure:traceStatuses(bf.trace),failureChanges:traceChanges(bf.trace),cycleStatus:bc.outcome.status,cycleTarget:endpointName(bFrameRoleValue(bc.state,"F","R")),recordTrace:bRec.trace.length};
+  const bObs={
+    repeat:normBTrace(br.trace),
+    failure:normBTrace(bf.trace),
+    cycle:normBTrace(bc.trace),
+    cycleStatus:bc.outcome.status,
+    cycleValue:endpointName(bFrameRoleValue(bc.state,"F","R")),
+    decodedCycle:normBTrace(bRec.trace)
+  };
 
   const abase=new JsonNearCarrier(), as=abase.atom("slots",{}), az=abase.atom("zero"), ao=abase.atom("one"), at=abase.atom("two");
   const ar=abase.duplet("rSlot",as,az); abase.createFrame("F",{E:ar,O:ar,R:ar,S:ar});
@@ -685,16 +742,37 @@ test("E2-R2 correspondence W6 — Q order, no-op semanticChange, runtime failure
   const aqf=afail.Q(afail.frame("F"),[{op:"rebindRole",role:"R",target:afail.ref("one")},{op:"rebindRole",role:"R",target:detached},{op:"rebindRole",role:"R",target:afail.ref("two")}]);
   const ac=acycle.Q(acycle.frame("F"),[{op:"rebindRole",role:"R",target:acycle.readDuplet("rSlot")}]);
   const arec=JsonNearCarrier.deserializeRecord(acycle.serializeRecord(ac.trace));
-  const aObs={repeat:traceStatuses(aq.trace),changes:traceChanges(aq.trace),failure:traceStatuses(aqf.trace),failureChanges:traceChanges(aqf.trace),cycleStatus:ac.status,cycleTarget:"D:rSlot",recordTrace:arec.trace.length};
+  const aObs={
+    repeat:normATrace(aq.trace),
+    failure:normATrace(aqf.trace),
+    cycle:normATrace(ac.trace),
+    cycleStatus:ac.status,
+    cycleValue:(acycle.roleValue(acycle.frame("F"),"R").kind==="atom"?"A:":"D:")+acycle.roleValue(acycle.frame("F"),"R").id,
+    decodedCycle:normATrace(arec.trace)
+  };
 
   const cbase=new DupletArrayCarrier(), cs=cbase.atom("slots"), cz=cbase.atom("zero"), co=cbase.atom("one"), ct=cbase.atom("two");
   const cr=cbase.duplet(cs,cz), cf=cbase.createFrame({E:cr,O:cr,R:cr,S:cr});
   const crun=cloneC(cbase), cfail=cloneC(cbase), ccycle=cloneC(cbase);
+  const missing=cfail.pairs.length+100;
+  const cmap=new Map([[cs,"A:slots"],[cz,"A:zero"],[co,"A:one"],[ct,"A:two"],[cr,"D:rSlot"],[missing,"A:missing"]]);
+  const normCHandle=id => cmap.get(id) ?? (()=>{throw new Error("unmapped C Q handle "+id)})();
+  const normCTrace = trace => trace.map(e=>({
+    index:e.index,op:e.op,role:e.role,slot:normCHandle(e.slot),target:normCHandle(e.target),
+    outcome:{status:e.outcome.status,diagnostic:e.outcome.diagnostic??null,semanticChange:e.outcome.semanticChange}
+  }));
   const cq=crun.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:co}]);
-  const cqf=cfail.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:cfail.pairs.length+100},{op:"rebindRole",role:"R",target:ct}]);
+  const cqf=cfail.Q(cf,[{op:"rebindRole",role:"R",target:co},{op:"rebindRole",role:"R",target:missing},{op:"rebindRole",role:"R",target:ct}]);
   const cyc=ccycle.Q(cf,[{op:"rebindRole",role:"R",target:cr}]);
   const crec=DupletArrayCarrier.deserializeRecord(ccycle.serializeRecord(cyc.trace));
-  const cObs={repeat:traceStatuses(cq.trace),changes:traceChanges(cq.trace),failure:traceStatuses(cqf.trace),failureChanges:traceChanges(cqf.trace),cycleStatus:cyc.status,cycleTarget:"D:rSlot",recordTrace:crec.trace.length};
+  const cObs={
+    repeat:normCTrace(cq.trace),
+    failure:normCTrace(cqf.trace),
+    cycle:normCTrace(cyc.trace),
+    cycleStatus:cyc.status,
+    cycleValue:normCHandle(ccycle.roleValue(cf,"R")),
+    decodedCycle:normCTrace(crec.trace)
+  };
   assert.deepEqual(aObs,bObs);
   assert.deepEqual(cObs,bObs);
 });
@@ -732,14 +810,18 @@ test("E2-R2 correspondence W8 — ordered bundle occurrence and conditional fact
   const bObs={};
   for(const [name,rows] of Object.entries(cases)){
     const entries=rows.map(([id,o,s])=>({id,R:N("not"),O:N(o),S:N(s)}));
-    bObs[name]={yes:bFactorBundle(entries,{preserveOccurrenceIdentity:true}).status,no:bFactorBundle(entries,{preserveOccurrenceIdentity:false}).status,order:entries.map(e=>e.id)};
+    const yes=bFactorBundle(entries,{preserveOccurrenceIdentity:true});
+    const no=bFactorBundle(entries,{preserveOccurrenceIdentity:false});
+    bObs[name]={yes:yes.status,no:no.status,order:yes.entries.map(e=>e.id)};
   }
 
   const a=new JsonNearCarrier(), an=a.atom("not"), a0=a.atom("0"), a1=a.atom("1");
   const aObs={};
   for(const [name,rows] of Object.entries(cases)){
     const entries=rows.map(([id,o,ss])=>({id,R:an,O:o==="0"?a0:a1,S:ss==="0"?a0:a1}));
-    aObs[name]={yes:a.factorBundle(entries,{preserveOccurrenceIdentity:true}).status,no:a.factorBundle(entries,{preserveOccurrenceIdentity:false}).status,order:entries.map(e=>e.id)};
+    const yes=a.factorBundle(entries,{preserveOccurrenceIdentity:true});
+    const no=a.factorBundle(entries,{preserveOccurrenceIdentity:false});
+    aObs[name]={yes:yes.status,no:no.status,order:yes.entries.map(e=>e.id)};
   }
 
   const c=new DupletArrayCarrier(), cn=c.atom("not"), c0=c.atom("0"), c1=c.atom("1");
@@ -752,6 +834,163 @@ test("E2-R2 correspondence W8 — ordered bundle occurrence and conditional fact
   }
   assert.deepEqual(aObs,bObs);
   assert.deepEqual(cObs,bObs);
+});
+
+
+test("E2-R3 correspondence W2b — shared/distinct hidden mutation discriminator and decoded observations agree across B/A/C", () => {
+  const observeB = st => ["d1","d2"].map(id=>bReadDuplet(st,bReadDuplet(st,id).begin.id).end.id);
+  let bb=createE1State();
+  for(const id of ["a","b","c","x","y"]) bb=bNode(bb,id);
+  bb=bMustTransition(bCreateDuplet(bb,{id:"h1",begin:N("a"),end:N("b")}));
+  bb=bMustTransition(bCreateDuplet(bb,{id:"h2",begin:N("a"),end:N("b")}));
+  bb=bMustTransition(bCreateDuplet(bb,{id:"d1",begin:P("h1"),end:N("x")}));
+  const bShared=bMustTransition(bCreateDuplet(bb,{id:"d2",begin:P("h1"),end:N("y")}));
+  const bDistinct=bMustTransition(bCreateDuplet(bb,{id:"d2",begin:P("h2"),end:N("y")}));
+  const bSharedAfter=bMustTransition(bRebindDupletEnd(bShared,"h1",N("c")));
+  const bDistinctAfter=bMustTransition(bRebindDupletEnd(bDistinct,"h1",N("c")));
+  const bSharedDecoded=deserializeE1State(serializeE1State(bSharedAfter));
+  const bDistinctDecoded=deserializeE1State(serializeE1State(bDistinctAfter));
+  const bObs={
+    shared:observeB(bSharedAfter),distinct:observeB(bDistinctAfter),
+    sharedDecoded:observeB(bSharedDecoded),distinctDecoded:observeB(bDistinctDecoded),
+    dependentIds:[bReadDuplet(bSharedAfter,"d1").id,bReadDuplet(bSharedAfter,"d2").id]
+  };
+
+  const makeA=shared=>{
+    const a=new JsonNearCarrier(), A=a.atom("a"), B=a.atom("b"), C=a.atom("c"), X=a.atom("x"), Y=a.atom("y");
+    const h1=a.duplet("h1",A,B), h2=a.duplet("h2",A,B), d1=a.duplet("d1",h1,X), d2=a.duplet("d2",shared?h1:h2,Y);
+    a.rebind("h1",C);
+    return {a,h1,h2,d1,d2};
+  };
+  const obsA=x=>[x.d1,x.d2].map(d=>d.begin.end.id);
+  const as=makeA(true), ad=makeA(false);
+  const asDec=JsonNearCarrier.deserializeLossless(as.a.serializeLossless()), adDec=JsonNearCarrier.deserializeLossless(ad.a.serializeLossless());
+  const aObs={
+    shared:obsA(as),distinct:obsA(ad),
+    sharedDecoded:["d1","d2"].map(id=>asDec.readDuplet(id).begin.end.id),
+    distinctDecoded:["d1","d2"].map(id=>adDec.readDuplet(id).begin.end.id),
+    dependentIds:[as.d1.id,as.d2.id]
+  };
+
+  const makeC=shared=>{
+    const c=new DupletArrayCarrier(), A=c.atom("a"), B=c.atom("b"), C=c.atom("c"), X=c.atom("x"), Y=c.atom("y");
+    const h1=c.duplet(A,B), h2=c.duplet(A,B), d1=c.duplet(h1,X), d2=c.duplet(shared?h1:h2,Y);
+    c.rebind(h1,C);
+    return {c,h1,h2,d1,d2,names:new Map([[B,"b"],[C,"c"]])};
+  };
+  const csx=makeC(true), cdx=makeC(false);
+  const obsC=x=>[x.d1,x.d2].map(d=>x.names.get(x.c.read(x.c.read(d).begin).end));
+  const csDec=cloneC(csx.c), cdDec=cloneC(cdx.c);
+  const obsDecoded=(orig,dec)=>[orig.d1,orig.d2].map(d=>orig.names.get(dec.read(dec.read(d).begin).end));
+  const cObs={
+    shared:obsC(csx),distinct:obsC(cdx),
+    sharedDecoded:obsDecoded(csx,csDec),distinctDecoded:obsDecoded(cdx,cdDec),
+    dependentIds:["d1","d2"]
+  };
+  assert.deepEqual(aObs,bObs);
+  assert.deepEqual(cObs,bObs);
+});
+
+test("E2-R3 P2-02 — invalidated C frame interpretation rejects before writes and preserves codec closure", () => {
+  const make=()=>{
+    const c=new DupletArrayCarrier();
+    const x=c.atom("x"), y=c.atom("y");
+    const d=c.duplet(x,y);
+    const f=c.createFrame({E:d,O:d,R:d,S:d});
+    const rs=c.read(c.read(f).end).end;
+    c.reattach(rs,x);
+    const validRaw=c.serializeLossless();
+    return {c,x,y,d,f,rs,validRaw};
+  };
+
+  const cw=make();
+  const wr=cw.c.commitWrites([{frame:cw.f,target:cw.y}]);
+  assert.equal(wr.status,"REJECT");
+  assert.match(wr.diagnostic,/INVALID_FRAME/);
+  assert.equal(cw.c.serializeLossless(),cw.validRaw);
+  assert.deepEqual(cw.c.read(cw.x),{id:cw.x,begin:cw.x,end:cw.x});
+
+  const cq=make();
+  const qr=cq.c.Q(cq.f,[{op:"rebindRole",role:"R",target:cq.y}]);
+  assert.equal(qr.status,"REJECT");
+  assert.match(qr.diagnostic,/INVALID_FRAME/);
+  assert.deepEqual(qr.trace,[]);
+  assert.equal(cq.c.serializeLossless(),cq.validRaw);
+  assert.deepEqual(cq.c.read(cq.x),{id:cq.x,begin:cq.x,end:cq.x});
+
+  const cf=make();
+  const atomFrameBefore=cf.c.serializeLossless();
+  const atomFrame=cf.c.commitWrites([{frame:cf.x,target:cf.y}]);
+  assert.equal(atomFrame.status,"REJECT");
+  assert.equal(atomFrame.diagnostic,"INVALID_FRAME");
+  assert.equal(cf.c.serializeLossless(),atomFrameBefore);
+
+  const cp=new DupletArrayCarrier();
+  const px=cp.atom("x"), py=cp.atom("y"), pd=cp.duplet(px,py);
+  const beforeParent=cp.serializeLossless();
+  assert.throws(()=>cp.createFrame({parent:px,E:pd,O:pd,R:pd,S:pd}),e=>e?.diagnostic==="INVALID_FRAME");
+  assert.equal(cp.serializeLossless(),beforeParent);
+});
+
+test("E2-R3 P2-03 — A Q malformed IDs reject in preflight while well-shaped missing IDs remain runtime failures, matching B", () => {
+  const malformed=[
+    {b:{sort:"N",id:""},a:{kind:"atom",id:""}},
+    {b:{sort:"N",id:"\0bad"},a:{kind:"atom",id:"\0bad"}},
+    {b:{sort:"N"},a:{kind:"atom"}}
+  ];
+  for(const item of malformed){
+    let b=createE1State();
+    for(const id of ["slots","zero","one"]) b=bNode(b,id);
+    b=bSlot(b,"rSlot",N("slots"),N("zero"));
+    b=bMustTransition(bCreateFrame(b,{id:"F",E:"rSlot",O:"rSlot",R:"rSlot",S:"rSlot"}));
+    const bBefore=serializeE1State(b);
+    const br=BQ(b,{frame:"F",steps:[
+      {op:"rebindRole",role:"R",target:N("one")},
+      {op:"rebindRole",role:"R",target:item.b}
+    ]});
+    assert.equal(br.outcome.status,"REJECT");
+    assert.equal(br.outcome.diagnostic,"INVALID_ID");
+    assert.equal(br.outcome.semanticChange,false);
+    assert.deepEqual(br.trace,[]);
+    assert.equal(serializeE1State(br.state),bBefore);
+
+    const a=new JsonNearCarrier(), slots=a.atom("slots",{}), zero=a.atom("zero"), one=a.atom("one");
+    const r=a.duplet("rSlot",slots,zero), F=a.createFrame("F",{E:r,O:r,R:r,S:r});
+    const aBefore=a.serializeLossless();
+    const ar=a.Q(F,[
+      {op:"rebindRole",role:"R",target:one},
+      {op:"rebindRole",role:"R",target:item.a}
+    ]);
+    assert.equal(ar.status,"REJECT");
+    assert.equal(ar.diagnostic,"INVALID_ID");
+    assert.deepEqual(ar.trace,[]);
+    assert.equal(a.serializeLossless(),aBefore);
+  }
+
+  let b=createE1State();
+  for(const id of ["slots","zero","one"]) b=bNode(b,id);
+  b=bSlot(b,"rSlot",N("slots"),N("zero"));
+  b=bMustTransition(bCreateFrame(b,{id:"F",E:"rSlot",O:"rSlot",R:"rSlot",S:"rSlot"}));
+  const br=BQ(b,{frame:"F",steps:[
+    {op:"rebindRole",role:"R",target:N("one")},
+    {op:"rebindRole",role:"R",target:N("missing")}
+  ]});
+  const a=new JsonNearCarrier(), slots=a.atom("slots",{}), zero=a.atom("zero"), one=a.atom("one");
+  const r=a.duplet("rSlot",slots,zero), F=a.createFrame("F",{E:r,O:r,R:r,S:r});
+  const missing={kind:"atom",id:"missing",value:null,members:{}};
+  const ar=a.Q(F,[
+    {op:"rebindRole",role:"R",target:one},
+    {op:"rebindRole",role:"R",target:missing}
+  ]);
+  assert.equal(ar.status,br.outcome.status);
+  assert.equal(ar.diagnostic,br.outcome.diagnostic);
+  assert.deepEqual(traceStatuses(ar.trace),traceStatuses(br.trace));
+  assert.deepEqual(traceChanges(ar.trace),traceChanges(br.trace));
+  assert.equal(r.end.id,bFrameRoleValue(br.state,"F","R").id);
+});
+
+test("E2-R3 boundary — duplicate object-key ambiguity is explicitly outside admitted A/B/C correspondence", () => {
+  assert.match(E2_LEDGER_QUALIFICATION_C.duplicateObjectKeys,/outside admitted E2 correspondence domain/i);
 });
 
 test("E2-R2 P3-02 — ledger states relative derivation and separates bundle graph predicate from external disposition policy", () => {
