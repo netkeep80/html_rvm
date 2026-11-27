@@ -32,7 +32,7 @@ function network(program,roles={},sourceController=null,resultEndpoint=null){
  for(const e of records)if(session.layout.has(key(e)))pos.set(key(e),session.layout.get(key(e)));
  svg.replaceChildren();$("network-count").textContent=records.length+" / "+plan.total+" идентичностей";
  const w=Math.max(760,...[...pos.values()].map(x=>x.x+70)),h=Math.max(420,...[...pos.values()].map(x=>x.y+55));
- const scale=plan.treeLayout?Math.min(1,svg.parentElement.clientWidth/w)*zoom:zoom;
+ const scale=plan.treeLayout?Math.min(1,(svg.parentElement.clientWidth||w)/w)*zoom:zoom;
  svg.setAttribute("viewBox","0 0 "+w+" "+h);svg.setAttribute("width",w*scale);svg.setAttribute("height",h*scale);
  for(const e of records.filter(e=>e.sort==="P")){
   const p=pos.get(key(e));
@@ -57,7 +57,7 @@ function network(program,roles={},sourceController=null,resultEndpoint=null){
 }
 function render(){
  const p=view??session.visible,state=p.state,ownerRun=viewRun??currentRun(),events=ownerRun?.events??[];
- const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??session.inspection?.frame);
+ const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??(!viewRun?session.inspection?.frame:undefined));
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
  source.disabled=session.running||!!viewRun;source.placeholder=session.projectionDiagnostic??"";
  source.hidden=!!viewRun;historical.hidden=!viewRun;if(viewRun&&historical.value!==(viewRun.sourceText??""))historical.value=viewRun.sourceText??"";
@@ -65,16 +65,16 @@ function render(){
  $("projection-note").textContent=viewRun?"Снимок исходной метапрограммы выбранного исполнения (read-only)":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":session.projectionPartial?"JSON — частичная проекция МО. Точная модель: Export exact.":"Выбор ключа → отношение; выбор значения → payload";
  for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
  $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
- $("inspect").disabled=session.running||session.dirty||!session.executable;
+ $("inspect").disabled=session.running||session.dirty||!session.executable||!!viewRun;
  let predicate=false;try{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;predicate=c==="is_string"||c==="is_null"}catch{}
- $("reflect").disabled=session.running||session.dirty||!session.executable||!predicate;
- $("apply").disabled=session.running||!session.dirty;
+ $("reflect").disabled=session.running||session.dirty||!session.executable||!predicate||!!viewRun;
+ $("apply").disabled=session.running||!session.dirty||!!viewRun;
  const canEdit=!view&&!session.running&&!session.dirty&&!session.branch&&!session.inspection;
  for(const id of ["new-atom","new-relation","advanced-apply"])$(id).disabled=!canEdit;
  $("delete-identity").disabled=!canEdit||!selected||selected==="P:j1:source-root";
  $("cancel-create").hidden=!creation;$("create-note").textContent=creation?(creation.begin?"Выберите конец нового дуплета":"Выберите начало нового дуплета"):"";
- $("import-json").disabled=session.running||session.dirty;$("export-json").disabled=session.appliedText===null;
- $("import-exact").disabled=session.running||session.dirty;
+ $("import-json").disabled=session.running||session.dirty||!!viewRun;$("export-json").disabled=session.appliedText===null;
+ $("import-exact").disabled=session.running||session.dirty||!!viewRun;
  network(p,f?.roles,active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,viewEvent?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)).resultEndpoint:(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";

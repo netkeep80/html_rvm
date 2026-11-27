@@ -42,6 +42,15 @@ try{
  await set("network-scope","focus","change");
  await clickId("reflect");check(await evalv("JSON.parse(document.getElementById('source').value).$sub.$rel==='is_null'"),"Q updates source");
  await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent)[0]===null"),"reflective replay");
+ await clickPoint(await pos('#timeline button:not([data-step]):nth-last-child(3)'));
+ check(await evalv("JSON.parse(document.getElementById('historical-source').value).$sub.$rel==='is_string'&&document.querySelector('#timeline [data-step]').textContent.startsWith('is_string')"),"old run owns source and events after Q/replay");
+ await clickPoint(await pos('#timeline [data-step="0"]'));
+ check(await evalv("JSON.parse(document.getElementById('transition-detail').textContent).observation.controller==='is_string'&&document.querySelector('#step-identities button[data-identity]').textContent==='Source controller'"),"old step exposes actual identities");
+ await clickPoint(await pos('#step-identities button[data-identity]'));
+ check(await evalv("document.getElementById('historical-source').value.slice(document.getElementById('historical-source').selectionStart,document.getElementById('historical-source').selectionEnd).includes('is_string')"),"historical source-controller navigation");
+ await clickId("return-current");
+ check(await evalv("JSON.parse(document.getElementById('source').value).$sub.$rel==='is_null'"),"return preserves current source");
+
  await shot("02-reflection","header");
  await set("example","ordinary","change");
  const selectSource=async needle=>evalv(`(()=>{const s=document.getElementById('source'),i=s.value.indexOf(${JSON.stringify(needle)});s.setSelectionRange(i,i);s.dispatchEvent(new KeyboardEvent("keyup",{key:"ArrowRight",bubbles:true}));return true})()`);
@@ -122,6 +131,30 @@ try{
  for(let i=0;i<100;i++){if((await exact())===saved)break;await sleep(25)}
  check((await exact())===saved,"exact file roundtrip preserves model identities");
  await shot("06-exact-import","header");
+ // Deterministic real file input race: only File.text completion is controlled.
+ const exactB=join(tmp,"modelB.json");await set("example","ordinary","change");const savedB=await exact();await writeFile(exactB,savedB);
+ await evalv("window.reads={};window.realText=File.prototype.text;File.prototype.text=function(){return new Promise((resolve,reject)=>{window.reads[this.name]={resolve,reject}})};true");
+ for(const reverse of [false,true]){
+  await upload("import-exact",exactFile);await upload("import-exact",exactB);
+  const release=async(name,value)=>evalv("window.reads["+JSON.stringify(name)+"].resolve("+JSON.stringify(value)+");true");
+  if(reverse){await release("modelB.json",savedB);await frame();await release("model.json",saved)}else{await release("model.json",saved);await frame();await release("modelB.json",savedB)}
+  await frame();check((await exact())===savedB,"latest exact file wins "+(reverse?"B-first":"A-first"));
+ }
+ await upload("import-exact",exactFile);await clickId("cancel-import");
+ await evalv("window.reads['model.json'].resolve("+JSON.stringify(saved)+");true");await frame();
+ check((await exact())===savedB,"cancelled file cannot publish");
+ await upload("import-exact",exactFile);await evalv("window.reads['model.json'].reject(Error('read failed'));true");await frame();
+ check((await exact())===savedB&&await evalv("document.getElementById('import-status').textContent.includes('read failed')"),"exact read rejection reported");
+ await evalv("File.prototype.text=window.realText;true");
+ await set("example","ORS 000","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='DATA'"),"DATA explicit mode");
+ await set("example","ORS 100","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='NO_CONTROLLER'"),"NO_CONTROLLER explicit mode");
+ await set("example","where","change");await clickId("run");check(await evalv("document.getElementById('mode').textContent==='CALL'"),"CALL explicit mode");
+ await send("Emulation.setDeviceMetricsOverride",{width:620,height:900,deviceScaleFactor:1,mobile:false});await frame();
+ await clickPoint(await pos('[data-tab-button="network"]'));
+ check(await evalv("getComputedStyle(document.querySelector('[data-panel=network]')).display!=='none'&&getComputedStyle(document.querySelector('[data-panel=source]')).display==='none'"),"narrow viewport uses shared tabs");
+ await clickPoint(await pos('[data-tab-button="timeline"]'));
+ check(await evalv("document.querySelectorAll('#timeline [data-step]').length===6"),"tabs preserve execution session");
+
 
 
  console.log("Unified Studio checks:",n);

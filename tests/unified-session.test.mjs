@@ -165,7 +165,13 @@ test("P2-01: bounded source occurrences report truncation; typed result relation
  assert.equal(incomingAttachments(s.applied,n).length,257);
 });
 test("P2-01: visit budget is explicitly reported even with zero matching paths",()=>{
- const s=createUnifiedSession(JSON.stringify(Array.from({length:4100},()=>0)));
+ let value=0;for(let i=0;i<13;i++)value=[value,null];
+ const s=createUnifiedSession(JSON.stringify(value));
+ const actions=[];for(const [id,node] of s.applied.state.mo.nodes)if(node.kind==="array"){
+  const members=[...s.applied.state.mo.relations].filter(([,r])=>r.owner.id===id&&r.label.kind==="index").sort((a,b)=>a[1].label.value-b[1].label.value);
+  actions.push({op:"rebindRelation",id:members[1][0],target:members[0][1].target});
+ }
+ assert.equal(s.atomic(actions).outcome.status,"OK");
  const info=sourceOccurrenceInfo(s.applied,s.appliedText,{sort:"P",id:"absent"});
  assert.equal(info.truncated,true);assert.equal(info.ranges.length,0);
 });
