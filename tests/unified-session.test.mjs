@@ -202,3 +202,29 @@ test("P2-03: latest import wins in both completion orders, cancellation and read
  assert.equal(await c.request(()=>Promise.reject(Error("read failed")),v=>log.push(v),e=>log.push(e.message)),"REJECT");
  assert.deepEqual(log,["read failed"]);
 });
+
+
+test("PC2 Studio real live branch, adoption, identity preservation and repeat",()=>{
+ const s=createUnifiedSession(examples["PC2 filter / patch / filter"]);
+ const before=s.lossless(),first=s.runPC2();assert.deepEqual(first.result,[null]);assert.equal(s.lossless(),before);
+ const exits=first.trace.filter(e=>e.op==="iterator-exit");assert.deepEqual(exits.map(e=>e.result),[["4"],[null]]);
+ const inv=first.trace.filter(e=>e.op==="exec-address"&&e.address==="$ent/filter");assert.equal(inv.length,2);assert.equal(inv[0].slot,inv[1].slot);
+ s.adoptPC2();assert.equal(JSON.parse(s.appliedText).filter.$sub.$rel,"is_null");assert.ok(s.pc2Snapshot);
+ assert.equal(s.applied.state,first.pc2Session.state);
+ const second=s.runPC2();assert.deepEqual(second.trace.filter(e=>e.op==="iterator-exit").map(e=>e.result),[[null],[null]]);
+ assert.equal(second.trace.find(e=>e.op==="exec-address"&&e.address==="$ent/filter").slot,inv[0].slot);
+ assert.notEqual(second.hostFrame,first.hostFrame);s.reset();assert.equal(s.applied.state,first.pc2Session.state);
+});
+test("PC2 Studio historical fragment, COPY ALIAS VIEW and attempted trace",()=>{
+ const fragment=createUnifiedSession(examples["PC2 PrepareFullReport fragment"],{registry:{"#":{eq_entity_name:"="}}});
+ assert.deepEqual(fragment.runPC2().result,["$$obj/FileName","$$obj/param11/meas_count"]);
+ for(const [name,result] of [["PC2 COPY",{result:{x:1}}],["PC2 ALIAS",{result:{x:9}}],["PC2 VIEW",{out:42}]]){
+  const s=createUnifiedSession(examples[name]);assert.deepEqual(s.runPC2().result,result);
+ }
+ const s=createUnifiedSession(examples["PC2 rollback"]),before=s.lossless();
+ assert.equal(s.runPC2(),null);assert.equal(s.lossless(),before);assert.equal(s.lastReject.diagnostic,"ITERATOR_FOREIGN_WRITE");assert.ok(s.lastReject.attemptedTrace.length);assert.equal(s.history.length,0);
+});
+test("PC2 Studio compactness uses actual independent runs",async()=>{
+ const {comparePC2Examples}=await import("../site/unified-session.js");const [a,b]=comparePC2Examples();
+ assert.equal(a.metrics.sourceBytes,262);assert.equal(b.metrics.sourceBytes,235);assert.deepEqual(a.filters,b.filters);assert.deepEqual(a.result,b.result);
+});

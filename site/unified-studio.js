@@ -1,8 +1,8 @@
-import {createUnifiedSession,examples,mathematicalExample,sourceIdentityAt,sourceOccurrenceInfo,occurrenceIdentity,incomingAttachments,executionStepView,createImportCoordinator,readLocalJSON,networkPresentation} from "./unified-session.js";
+import {createUnifiedSession,examples,exampleExecution,comparePC2Examples,mathematicalExample,sourceIdentityAt,sourceOccurrenceInfo,occurrenceIdentity,incomingAttachments,executionStepView,createImportCoordinator,readLocalJSON,networkPresentation} from "./unified-session.js";
 import {inspectNaturalEntity} from "../research/pc1/j1-natural-json.mjs";
 import {projectionOccurrences,locateVPath} from "./mo-projection-sync.js";
 const $=id=>document.getElementById(id);
-let session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null,zoom=1,creation=null;
+let profile="J1",pc2Event=null,session=createUnifiedSession(),selected=null,frame=null,version=null,view=null,viewEvent=null,viewRun=null,gesture=null,zoom=1,creation=null;
 const importer=createImportCoordinator(), historical=$("historical-source");
 const source=$("source"),svg=$("network"),ns="http://www.w3.org/2000/svg",json=x=>JSON.stringify(x,null,2);
 const key=e=>e.sort+":"+e.id, endpoint=k=>({sort:k[0],id:k.slice(2)});
@@ -57,15 +57,21 @@ function network(program,roles={},sourceController=null,resultEndpoint=null){
 }
 function render(){
  const p=view??session.visible,state=p.state,ownerRun=viewRun??currentRun(),events=ownerRun?.events??[];
- const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??(!viewRun?session.inspection?.frame:undefined));
+ const active=viewEvent??events.find(x=>x.frame===frame)??events.at(-1),f=state.frames.get(frame??active?.frame??ownerRun?.hostFrame??(!viewRun?session.inspection?.frame:undefined));
+ const controller=pc2Event?.sourceController??active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null;
  $("status").textContent=(session.dirty?"DIRTY":"APPLIED")+(session.running?" · tentative":"")+(session.diagnostic?" · "+session.diagnostic:"");
  source.disabled=session.running||!!viewRun;source.placeholder=session.projectionDiagnostic??"";
  source.hidden=!!viewRun;historical.hidden=!viewRun;if(viewRun&&historical.value!==(viewRun.sourceText??""))historical.value=viewRun.sourceText??"";
  $("return-current").hidden=!viewRun;$("mode").textContent=ownerRun?.mode??(session.lastReject?.kind==="run"?"REJECT · "+session.lastReject.diagnostic:"—");
  $("projection-note").textContent=viewRun?"Снимок исходной метапрограммы выбранного исполнения (read-only)":session.projectionDiagnostic?"Natural JSON unavailable: "+session.projectionDiagnostic+" · точная МО сохранена":session.dirty?"Черновик не связан с применённой МО":session.projectionPartial?"JSON — частичная проекция МО. Точная модель: Export exact.":"Выбор ключа → отношение; выбор значения → payload";
  for(const id of ["apply","discard","inspect","reflect","example","import-exact"])$(id).disabled=session.running;
- $("run").disabled=$("step").disabled=!version||session.dirty||!session.executable;
- $("inspect").disabled=session.running||session.dirty||!session.executable||!!viewRun;
+ $("run").disabled=!version||session.dirty||!!viewRun||!(profile==="PC2"?session.pc2Executable:session.executable);
+ $("step").disabled=profile==="PC2"||$("run").disabled;
+ $("execution-profile").disabled=session.running||!!viewRun;
+ $("adopt-pc2").disabled=!!viewRun||session.dirty||session.branch?.profile!=="PC2";
+ $("pc2-note").textContent=profile==="PC2"?"EXEC · Run атомарен; события показывают итоговое состояние, не Step. Принять результат — сохранить МО и исполнительную сессию.":"J1 · реальные Step; where сохраняет выбранную идентичность.";
+ $("pc2-metrics").textContent=ownerRun?.metrics?json(ownerRun.metrics):"—";
+ $("inspect").disabled=profile==="PC2"||session.running||session.dirty||!session.executable||!!viewRun;
  let predicate=false;try{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;predicate=c==="is_string"||c==="is_null"}catch{}
  $("reflect").disabled=session.running||session.dirty||!session.executable||!predicate||!!viewRun;
  $("apply").disabled=session.running||!session.dirty||!!viewRun;
@@ -75,9 +81,9 @@ function render(){
  $("cancel-create").hidden=!creation;$("create-note").textContent=creation?(creation.begin?"Выберите конец нового дуплета":"Выберите начало нового дуплета"):"";
  $("import-json").disabled=session.running||session.dirty||!!viewRun;$("export-json").disabled=session.appliedText===null;
  $("import-exact").disabled=session.running||session.dirty||!!viewRun;
- network(p,f?.roles,active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,viewEvent?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)).resultEndpoint:(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
+ network(p,f?.roles,controller,viewEvent?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)).resultEndpoint:(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
- $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:active?.sourceControllerSlot??session.inspection?.sourceSlots.R?.id??null,runtimeR:f.roles.R}):"—";
+ $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:controller,runtimeR:f.roles.R}):"—";
  $("role-cards").replaceChildren();if(f){for(const [role,id] of Object.entries(f.roles)){const b=document.createElement("button");b.textContent=role;b.title=id;b.dataset.alias=String(Object.values(f.roles).filter(x=>x===id).length>1);b.onclick=()=>choose("P:"+id);$("role-cards").append(b)}}
  $("last-reject").textContent=session.lastReject?"REJECT · "+session.lastReject.diagnostic+" · committed state unchanged":"";
  const resultRun=ownerRun&&!ownerRun.tentative?ownerRun:null;
@@ -93,17 +99,21 @@ function render(){
  const resultProgram=step?.program??resultRun?.program,resultRoot=step?.resultEndpoint??resultRun?.resultEndpoint;
  if(ep&&resultProgram&&resultRoot){const v=projectionOccurrences(resultProgram.state.mo,resultRoot,ep);for(const path of v.paths){const b=document.createElement("button");b.textContent="Result "+json(path);b.onclick=()=>{const q=occurrenceIdentity(resultProgram,resultRoot,path,ep);if(q)choose(key(q))};$("result-occurrences").append(b)}bounded($("result-occurrences"),v)}
  $("timeline").replaceChildren();
+ if(ownerRun?.profile==="PC2"||(!ownerRun&&session.lastReject?.profile==="PC2")){
+  const trace=ownerRun?.trace??session.lastReject.attemptedTrace;
+  for(const [index,e] of trace.entries()){const b=document.createElement("button");b.textContent=(ownerRun?"COMMITTED ":"ATTEMPT ")+index+" "+e.op;b.dataset.pc2Event=String(index);b.onclick=()=>{pc2Event=ownerRun?e:null;frame=ownerRun?[e.frame,e.id,e.to,e.from].find(id=>state.frames.has(id))??ownerRun.hostFrame:null;selected=ownerRun&&e.sourceController?"P:"+e.sourceController:null;$("transition-detail").textContent=json({state:ownerRun?"FINAL":"UNCHANGED",event:e});render()};$("timeline").append(b)}
+ }
  for(const [index,e] of events.entries()){const b=document.createElement("button");b.textContent=e.controller+(e.iteration===null?"":" ["+e.iteration+"]")+" → "+json(e.result);b.dataset.tentative=String(!!ownerRun.tentative);b.dataset.step=String(index);b.onclick=()=>selectStep(ownerRun,index);$("timeline").append(b)}
  let runNo=0;
  for(const entry of session.history){const b=document.createElement("button");
-  if(entry.kind==="run"){const run=entry.run;b.textContent="Run "+(++runNo)+": "+json(run.result);b.onclick=()=>{creation=null;view=run.program;viewRun=run;viewEvent=null;selected=null;frame=run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()}}
+  if(entry.kind==="run"){const run=entry.run;b.textContent="Run "+(++runNo)+": "+json(run.result);b.onclick=()=>{creation=null;view=run.program;viewRun=run;viewEvent=null;selected=null;pc2Event=null;frame=run.hostFrame??run.events.at(-1)?.frame??null;$("transition-detail").textContent=json({events:run.events,trace:run.trace});render()}}
   else{b.textContent=entry.kind==="Q"?"Q: reflection":entry.actions.map(x=>x.op).join(", ");b.onclick=()=>{$("transition-detail").textContent=json(entry)}}
   $("timeline").append(b)
  }
 
 }
 function act(fn){importer.cancel();if($("import-status").textContent.startsWith("Чтение "))$("import-status").textContent="Импорт отменён изменением сеанса";try{fn();render()}catch(e){render();$("status").textContent=e.message}}
-function clearView(){creation=null;view=null;viewEvent=null;viewRun=null;frame=null;$("transition-detail").textContent=""}
+function clearView(){pc2Event=null;creation=null;view=null;viewEvent=null;viewRun=null;frame=null;$("transition-detail").textContent=""}
 function syncText(){source.value=session.draft??""}
 svg.addEventListener("pointerdown",ev=>{if(ev.button!==0)return;const g=ev.target.closest("[data-identity]");if(!g)return;const k=g.dataset.identity,p=coord(ev),side=ev.target.dataset.socket;gesture={k,side,start:p,base:session.layout.get(k)??{x:g.transform.baseVal.getItem(0).matrix.e,y:g.transform.baseVal.getItem(0).matrix.f}};svg.setPointerCapture(ev.pointerId);ev.preventDefault()});
 svg.addEventListener("pointermove",ev=>{if(!gesture)return;const p=coord(ev);if(Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)<5&&!gesture.moved)return;gesture.moved=true;if(gesture.side){gesture.line?.remove();gesture.line=el("line",{x1:gesture.start.x,y1:gesture.start.y,x2:p.x,y2:p.y,stroke:"#f7d17b","stroke-width":2,"pointer-events":"none"});svg.append(gesture.line)}else{session.layout.set(gesture.k,{x:Math.max(50,gesture.base.x+p.x-gesture.start.x),y:Math.max(30,gesture.base.y+p.y-gesture.start.y)});render()}});
@@ -112,7 +122,7 @@ svg.addEventListener("pointercancel",()=>{gesture?.line?.remove();gesture=null;r
 for(const name of Object.keys(examples)){const o=document.createElement("option");o.value=name;o.textContent=name;$("example").append(o)}
 $("example").value="where";syncText();
 let example="where";
-$("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросить черновик?")){$("example").value=example;return}example=$("example").value;session=examples[example]===null?createUnifiedSession(null,{model:mathematicalExample(example)}):createUnifiedSession(examples[example]);syncText();selected=null;clearView()});
+$("example").onchange=()=>act(()=>{if(session.dirty&&!confirm("Отбросить черновик?")){$("example").value=example;return}example=$("example").value;const config=exampleExecution(example);profile=config.profile;$("execution-profile").value=profile;session=examples[example]===null?createUnifiedSession(null,{model:mathematicalExample(example)}):createUnifiedSession(examples[example],{registry:config.registry});syncText();selected=null;clearView()});
 source.oninput=()=>act(()=>session.edit(source.value));
 function selectSource(){const owner=sourceOwner();if(owner&&owner.text!==null){const e=sourceIdentityAt(owner.program,owner.text,owner.editor.selectionStart);if(e)choose(key(e),false)}}
 for(const editor of [source,historical]){editor.addEventListener("click",selectSource);editor.addEventListener("keyup",selectSource)}
@@ -127,7 +137,10 @@ $("zoom-out").onclick=()=>act(()=>{zoom=Math.max(.5,zoom/1.2)});
 $("inspect").onclick=()=>act(()=>{clearView();session.inspect()});
 const env=()=>({version,meta:{engine:"html_rvm",slice:"J1"}});
 $("step").onclick=()=>act(()=>{clearView();session.step(env())});
-$("run").onclick=()=>act(()=>{clearView();session.run(env())});
+$("run").onclick=()=>act(()=>{clearView();if(profile==="PC2")session.runPC2();else session.run(env())});
+$("execution-profile").onchange=()=>act(()=>{session.reset();clearView();profile=$("execution-profile").value});
+$("adopt-pc2").onclick=()=>act(()=>{session.adoptPC2();syncText();clearView()});
+$("compare-pc2").onclick=()=>act(()=>{$("pc2-comparison").textContent=json(comparePC2Examples())});
 $("reflect").onclick=()=>act(()=>{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;const e=session.reflect(["$sub"],"R",c==="is_string"?"is_null":"is_string");syncText();selected="P:"+e.sourceSlot.id;clearView()});
 function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),0)}
 $("export-exact").onclick=()=>download(session.lossless(),"mo-exact.json");
