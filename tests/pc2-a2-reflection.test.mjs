@@ -2,11 +2,43 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  Index,
+  Key,
+  N,
+  executeMOAtomically
+} from "../src/mo-core.js";
+import {
   createPC2A1Session,
   executePC2A1,
   executePC2A2,
   snapshotPC2A1Session
 } from "../research/pc2/a1-contextual-json.mjs";
+
+
+function sourceRootNode(session) {
+  const anchor = session.state.mo.relations.get("j1:source-root");
+  assert.ok(anchor?.bound && anchor.target?.sort === "N");
+  return anchor.target;
+}
+
+function keyedTarget(session, owner, key) {
+  const matches = [...session.state.mo.relations.values()].filter(relation =>
+    relation.bound &&
+    relation.owner?.sort === owner.sort &&
+    relation.owner?.id === owner.id &&
+    relation.label?.kind === "key" &&
+    relation.label?.value === key);
+  assert.equal(matches.length, 1, `expected one key ${key}`);
+  assert.equal(matches[0].target.sort, "N");
+  return matches[0].target;
+}
+
+function injectMO(session, actions) {
+  const result = executeMOAtomically(session.state.mo, actions);
+  assert.equal(result.outcome.status, "OK");
+  session.state = { ...session.state, mo: result.state };
+  return session;
+}
 
 test("PC2-A2 EXEC is explicit: A1 DATA stays unchanged, execution strings differ from operand strings", () => {
   const data = { a: 1, nested: ["x"] };
@@ -571,4 +603,212 @@ test("PC2-A2 H probes and real execution consume one shared monotonic work budge
   // its attempted route before executeSlot rejects on fuel; only 255 scalar bodies commit tentatively.
   assert.equal(run.attemptedTrace.filter(event => event.op === "H-route").length, 256);
   assert.equal(run.attemptedTrace.filter(event => event.op === "scalar").length, 255);
+});
+
+
+test("PC2-A2 audit P2-01 — cold exact-ref preparation in multi-H rejects in both branch orders before real H", () => {
+  for (const coldFirst of [true, false]) {
+    const source = {
+      $rel: coldFirst
+        ? { "$rel/a": { $ref: "cold" }, "$rel/b": 9 }
+        : { "$rel/a": 9, "$rel/b": { $ref: "cold" } }
+    };
+    const session = createPC2A1Session(source, { registry: { cold: 7 } });
+    const before = snapshotPC2A1Session(session);
+    const run = executePC2A2(session, { entry: "EXEC" });
+
+    assert.equal(run.diagnostic, "H_UNPROVEN_INTERFERENCE");
+    assert.equal(snapshotPC2A1Session(run.session), before);
+    assert.deepEqual(run.committedTrace, []);
+    assert.equal(run.attemptedTrace.filter(event => event.op === "H-route").length, 0);
+    assert.ok(run.attemptedTrace.some(event => event.op === "host.load" && event.name === "cold"));
+    assert.ok(run.attemptedTrace.some(event =>
+      event.op === "H-preparation" && event.diagnostic === "H_UNPROVEN_INTERFERENCE"));
+  }
+});
+
+test("PC2-A2 audit P2-01 — cold global lvalue preparation in multi-H rejects, explicit sequential warmup remains admitted", () => {
+  const cold = createPC2A1Session({
+    $rel: {
+      "cold/x": 1,
+      "$rel/b": 9
+    }
+  }, { registry: { cold: { x: 0 } } });
+  const before = snapshotPC2A1Session(cold);
+  const rejected = executePC2A2(cold, { entry: "EXEC" });
+  assert.equal(rejected.diagnostic, "H_UNPROVEN_INTERFERENCE");
+  assert.equal(snapshotPC2A1Session(rejected.session), before);
+  assert.deepEqual(rejected.committedTrace, []);
+  assert.equal(rejected.attemptedTrace.filter(event => event.op === "H-route").length, 0);
+  assert.ok(rejected.attemptedTrace.some(event => event.op === "host.load" && event.name === "cold"));
+
+  const warmed = executePC2A2(createPC2A1Session({
+    $rel: [
+      { $obj: { $ref: "cold" }, $rel: "=" },
+      { $obj: {}, $rel: "=" },
+      {
+        "$rel/a": { $ref: "cold" },
+        "$rel/b": 9
+      }
+    ]
+  }, { registry: { cold: 7 } }), { entry: "EXEC" });
+  assert.equal(warmed.diagnostic, null);
+  assert.deepEqual(warmed.result, { a: 7, b: 9 });
+  assert.equal(warmed.committedTrace.filter(event => event.op === "host.load" && event.name === "cold").length, 1);
+  assert.ok(warmed.committedTrace.some(event => event.op === "host.cache-hit" && event.name === "cold"));
+});
+
+test("PC2-A2 audit P2-02 — decorated scalar input is rejected before iterator-enter with exact rollback", () => {
+  const session = createPC2A1Session({
+    $obj: null,
+    $rel: "where",
+    $sub: true
+  });
+  const root = sourceRootNode(session);
+  const input = keyedTarget(session, root, "$obj");
+  injectMO(session, [
+    { op: "createNode", id: "audit:N:decorated", kind: "number", payload: 7 },
+    {
+      op: "createRelation",
+      id: "audit:P:decorated",
+      owner: N(input.id),
+      label: Key("x"),
+      target: N("audit:N:decorated")
+    }
+  ]);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+
+  assert.equal(run.diagnostic, "JSON_SCALAR_HAS_MEMBERS");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+  assert.equal(run.attemptedTrace.filter(event => event.op === "iterator-enter").length, 0);
+});
+
+test("PC2-A2 audit P2-02 — cyclic previous where output is rejected before reset while ordinary empty output remains valid", () => {
+  const session = createPC2A1Session({
+    bad: [],
+    loop: { $obj: [1], $rel: "where", $sub: true },
+    $rel: [
+      { $obj: { $ref: "$ent/bad" }, $rel: "ALIAS" },
+      { $ref: "$ent/loop" }
+    ]
+  });
+  const root = sourceRootNode(session);
+  const bad = keyedTarget(session, root, "bad");
+  injectMO(session, [{
+    op: "createRelation",
+    id: "audit:P:cycle",
+    owner: N(bad.id),
+    label: Index(0),
+    target: N(bad.id)
+  }]);
+  const before = snapshotPC2A1Session(session);
+  const run = executePC2A2(session, { entry: "EXEC" });
+
+  assert.equal(run.diagnostic, "JSON_CYCLE");
+  assert.equal(snapshotPC2A1Session(run.session), before);
+  assert.deepEqual(run.committedTrace, []);
+  assert.equal(run.attemptedTrace.filter(event => event.op === "iterator-enter").length, 0);
+
+  const control = executePC2A2(createPC2A1Session({
+    $obj: [1],
+    $rel: "where",
+    $sub: true
+  }), { entry: "EXEC" });
+  assert.equal(control.diagnostic, null);
+  assert.deepEqual(control.result, [1]);
+});
+
+test("PC2-A2 audit P2-03 — predicates write boolean result to S, not R, for distinct role identities", () => {
+  for (const [controller, operand] of [["is_string", "a"], ["is_null", null]]) {
+    const run = executePC2A2(createPC2A1Session({
+      $rel: {
+        $obj: operand,
+        $rel: controller,
+        $sub: { $ref: "$rel/out" }
+      }
+    }), { entry: "EXEC" });
+
+    assert.equal(run.diagnostic, null);
+    assert.deepEqual(run.result, { out: true });
+    const predicate = run.committedTrace.find(event => event.op === "predicate" && event.value === true);
+    assert.ok(predicate);
+    const v = run.committedTrace.find(event =>
+      event.op === "V-enter" && event.to === predicate.frame);
+    assert.ok(v);
+    assert.equal(predicate.S, v.S);
+    assert.notEqual(v.R, v.S);
+  }
+});
+
+test("PC2-A2 audit P2-03 — foreign predicate S inside foreach is rejected for is_string and is_null", () => {
+  for (const [controller, operand] of [["is_string", "a"], ["is_null", null]]) {
+    const session = createPC2A1Session({
+      foreign: 0,
+      $obj: [1],
+      $rel: "foreachobj",
+      $sub: {
+        $obj: operand,
+        $rel: controller,
+        $sub: { $ref: "$ent/foreign" }
+      }
+    });
+    const before = snapshotPC2A1Session(session);
+    const run = executePC2A2(session, { entry: "EXEC" });
+
+    assert.equal(run.diagnostic, "ITERATOR_FOREIGN_WRITE");
+    assert.equal(snapshotPC2A1Session(run.session), before);
+    assert.deepEqual(run.committedTrace, []);
+    assert.ok(run.attemptedTrace.some(event =>
+      event.op === "iterator-item" && event.kind === "foreachobj"));
+  }
+});
+
+test("PC2-A2 corrective reflection witness — dynamically generated same P changes from literal to exact real-row reference", () => {
+  const source = {
+    row: { FileName: "REAL-ROW" },
+    $rel: [
+      {
+        "$rel/func/$obj": { $obj: "LITERAL", $rel: "=" },
+        "$rel/func/$rel": { $obj: "=", $rel: "=" },
+        "$rel/func/$sub/$ref": { $obj: "$rel/out", $rel: "=" }
+      },
+      "$rel/func",
+      {
+        $obj: { $ref: "$rel/out" },
+        $rel: "=",
+        $sub: { $ref: "$rel/first" }
+      },
+      {
+        $obj: null,
+        $rel: "=",
+        $sub: { $ref: "$rel/func/$obj" }
+      },
+      {
+        $obj: "$ent/row/FileName",
+        $rel: "=",
+        $sub: { $ref: "$rel/func/$obj/$ref" }
+      },
+      "$rel/func"
+    ]
+  };
+
+  const run = executePC2A2(createPC2A1Session(source), { entry: "EXEC" });
+  assert.equal(run.diagnostic, null);
+  assert.equal(run.result.first, "LITERAL");
+  assert.equal(run.result.out, "REAL-ROW");
+  assert.deepEqual(run.result.func.$obj, { $ref: "$ent/row/FileName" });
+
+  const invocations = run.committedTrace.filter(event =>
+    event.op === "exec-address" && event.address === "$rel/func");
+  assert.equal(invocations.length, 2);
+  assert.equal(invocations[0].slot, invocations[1].slot);
+
+  const calls = run.committedTrace.filter(event =>
+    event.op === "V-enter" && event.E === invocations[0].slot);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].E, calls[1].E);
+  assert.ok(run.committedTrace.some(event =>
+    event.op === "resolve" && event.address === "$ent/row/FileName" && event.status === "OK"));
 });
