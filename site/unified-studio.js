@@ -84,7 +84,7 @@ function render(){
  network(p,f?.roles,controller,viewEvent?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)).resultEndpoint:(viewRun??session.branch)?.resultEndpoint);const ep=selected?endpoint(selected):null,record=ep?(ep.sort==="N"?state.mo.nodes:state.mo.relations).get(ep.id):null;
  $("selection").textContent=record?json({identity:ep,...record}):"Выберите идентичность";
  $("context").textContent=f?json({frame:f.id,parent:f.parent,roles:f.roles,sourceController:controller,runtimeR:f.roles.R}):"—";
- $("role-cards").replaceChildren();if(f){for(const [role,id] of Object.entries(f.roles)){const b=document.createElement("button");b.textContent=role;b.title=id;b.dataset.alias=String(Object.values(f.roles).filter(x=>x===id).length>1);b.onclick=()=>choose("P:"+id);$("role-cards").append(b)}}
+ $("role-cards").replaceChildren();if(f){for(const [role,id] of Object.entries(f.roles)){const b=document.createElement("button");b.textContent=role;b.title=id;b.dataset.alias=String(Object.values(f.roles).filter(x=>x===id).length>1);b.onclick=()=>choose("P:"+id);$("role-cards").append(b)}if(ownerRun?.profile==="PC2"&&f.parent){const b=document.createElement("button");b.textContent="Parent";b.title=f.parent;b.onclick=()=>{frame=f.parent;pc2Event=null;render()};$("role-cards").append(b)}}
  $("last-reject").textContent=session.lastReject?"REJECT · "+session.lastReject.diagnostic+" · committed state unchanged":"";
  const resultRun=ownerRun&&!ownerRun.tentative?ownerRun:null;
  const step=viewEvent&&viewRun?executionStepView(viewRun,viewRun.events.indexOf(viewEvent)):null;

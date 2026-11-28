@@ -228,3 +228,12 @@ test("PC2 Studio compactness uses actual independent runs",async()=>{
  const {comparePC2Examples}=await import("../site/unified-session.js");const [a,b]=comparePC2Examples();
  assert.equal(a.metrics.sourceBytes,262);assert.equal(b.metrics.sourceBytes,235);assert.deepEqual(a.filters,b.filters);assert.deepEqual(a.result,b.result);
 });
+
+test("PC2 Studio adoption carries host registry and allocator, reset and rejection are isolated",()=>{
+ const s=createUnifiedSession('{"$obj":{"v":7},"$rel":"add_entity"}');
+ const a=s.runPC2();assert.equal(a.result,"pc2-ent-1");
+ s.adoptPC2();const snapshot=s.pc2Snapshot;assert.ok(snapshot.includes("pc2-ent-1"));
+ const b=s.runPC2();assert.equal(b.result,"pc2-ent-2");s.reset();assert.equal(s.pc2Snapshot,snapshot);
+ assert.equal(s.runPC2().result,"pc2-ent-2");s.reset();
+ s.edit('{"$obj":{"v":7},"$rel":"add_entity"}');assert.equal(s.apply(),true);assert.equal(s.pc2Snapshot,null);assert.equal(s.runPC2().result,"pc2-ent-1");
+});

@@ -26,7 +26,7 @@ const filterSource={filter:{$obj:[null,2,false,"4",{}],$rel:"where",$sub:{$obj:r
 const pc2Examples={
  "PC2 filter / patch / filter":filterSource,
  "PC2 explicit references":{...filterSource,$rel:filterSource.$rel.map(ref)},
- "PC2 PrepareFullReport fragment":{$rel:[{$obj:ref("#/eq_entity_name"),$rel:"="},{$obj:null,$rel:"="},{$obj:["$obj/FileName","$obj/param11/meas_count"],$rel:"foreachobj",$sub:[{"$rel/func":{"$rel/$obj":{$obj:ref("$obj"),$rel:"="},"$rel/$rel":{$obj:ref("#/eq_entity_name"),$rel:"="}}},"$rel/func"]}]},
+ "PC2 PrepareFullReport fragment":{$rel:[{$obj:ref("#/eq_entity_name"),$rel:"="},{$obj:null,$rel:"="},{$obj:["$$obj/FileName","$$obj/param11/meas_count"],$rel:"foreachobj",$sub:[{"$rel/func":{"$rel/$obj":{$obj:ref("$obj"),$rel:"="},"$rel/$rel":{$obj:ref("#/eq_entity_name"),$rel:"="}}},"$rel/func"]}]},
  "PC2 VIEW":{model:{$obj:42,$rel:"="},$rel:{$obj:ref("$ent/model"),$rel:"VIEW",$sub:ref("$rel/out")}},
  "PC2 rollback":{$obj:[{x:1},{x:2}],$rel:"foreachobj",$sub:{$obj:9,$rel:"=",$sub:ref("$obj/x")}}
 };

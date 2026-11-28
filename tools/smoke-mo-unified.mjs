@@ -192,10 +192,13 @@ try{
  await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent)[0]===null"),"execute adopted session");
  await shot("07-pc2-reflection","header");
  await set("example","PC2 PrepareFullReport fragment","change");await clickId("run");
- check(await evalv("JSON.parse(document.getElementById('result').textContent).length===2"),"historical two-column fragment");
+ check(await evalv("JSON.stringify(JSON.parse(document.getElementById('result').textContent))===JSON.stringify(['$$obj/FileName','$$obj/param11/meas_count'])"),"historical two-column fragment");
  await set("example","PC2 rollback","change");const pc2RejectBefore=await exact();await clickId("run");
  check((await exact())===pc2RejectBefore&&await evalv("document.getElementById('last-reject').textContent.includes('ITERATOR_FOREIGN_WRITE')&&document.querySelector('[data-pc2-event]').textContent.startsWith('ATTEMPT')"),"PC2 atomic reject with attempted trace");
  await set("example","PC2 COPY","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).result.x===1"),"PC2 COPY");
  await set("example","PC2 ALIAS","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).result.x===9"),"PC2 ALIAS");
+ await set("example","PC2 VIEW","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).out===42"),"PC2 VIEW");
+ await evalv("document.getElementById('compare-pc2').closest('details').open=true;true");await clickId("compare-pc2");
+ check(await evalv("(()=>{const [a,b]=JSON.parse(document.getElementById('pc2-comparison').textContent);return a.metrics.sourceBytes===262&&b.metrics.sourceBytes===235&&JSON.stringify(a.filters)===JSON.stringify(b.filters)})()"),"actual PC2 comparison");
  console.log("Unified Studio checks:",n);
 }finally{ws?.close();if(browser&&browser.exitCode===null&&browser.signalCode===null){const closed=new Promise(r=>browser.once("close",r));browser.kill();await Promise.race([closed,sleep(3000)]);if(browser.exitCode===null&&browser.signalCode===null){browser.kill("SIGKILL");await Promise.race([closed,sleep(1000)]);}}server.closeAllConnections();await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true,maxRetries:10,retryDelay:150});}
