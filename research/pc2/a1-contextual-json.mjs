@@ -621,6 +621,13 @@ function writeScalarToR(tx, frameId, value) {
   record(tx, { op: "scalar", frame: frameId, R: slot.id, value });
 }
 
+function writePredicateToS(tx, frameId, value) {
+  const endpoint = appendJSON(tx, value, "predicate-copy");
+  const slot = frameRoleSlot(tx.state, frameId, "S");
+  guardedRebind(tx, slot, endpoint, "predicate-write");
+  record(tx, { op: "predicate", frame: frameId, S: slot.id, value });
+}
+
 function normalizePublicPSlot(value) {
   if (typeof value === "string") return P(value);
   if (!value || typeof value !== "object" || value.sort !== "P" || typeof value.id !== "string") {
@@ -698,7 +705,7 @@ function primitivePredicateKind(tx, frameId, expectedKind) {
   const O = frameRoleSlot(tx.state, frameId, "O");
   const relation = readRelation(tx, O);
   const value = relation.target.sort === "N" ? tx.state.mo.nodes.get(relation.target.id) : null;
-  return writeScalarToR(tx, frameId, value?.kind === expectedKind);
+  return writePredicateToS(tx, frameId, value?.kind === expectedKind);
 }
 
 function aliasSlots(tx, O, S, frameId = null) {
@@ -801,6 +808,10 @@ function iteratorPreflight(tx, frameId, kind) {
   const inputRelation = readRelation(tx, O);
   let items;
   if (inputRelation.target.sort !== "N") reject("ITERATOR_INPUT_REQUIRED");
+  // Bounded A2 iterators admit only the full finite plain-JSON image. This is
+  // intentionally stricter than legal R0 MO state (which may contain cycles,
+  // sharing and structurally decorated scalar nodes).
+  projectValue(tx, inputRelation.target);
   const inputNode = tx.state.mo.nodes.get(inputRelation.target.id);
   if (kind === "where" && inputNode?.kind === "null") items = [];
   else {
@@ -809,12 +820,13 @@ function iteratorPreflight(tx, frameId, kind) {
       reject("ARRAY_REQUIRED");
     }
     items = arrayMembers(tx.state, inputRelation.target);
-    // Validate the full finite JSON image before output mutation.
-    projectValue(tx, inputRelation.target);
   }
 
   const outputRelation = readRelation(tx, R);
   if (outputRelation.target.sort !== "N") reject("ITERATOR_OUTPUT_INVALID");
+  // The previous output value is part of iterator admission even though it is
+  // replaced on success. Reject a cyclic/non-JSON old value before iterator-enter.
+  projectValue(tx, outputRelation.target);
   const outputNode = tx.state.mo.nodes.get(outputRelation.target.id);
   if (kind === "where") {
     if (outputNode?.kind !== "null" && outputNode?.kind !== "array") reject("ITERATOR_OUTPUT_INVALID");
@@ -1115,12 +1127,30 @@ function executeLambdaObject(tx, frameId, modelSlot) {
   const branches = [...members.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   if (branches.length === 0) return;
 
+  const preparationTraceStart = tx.attemptedTrace.length;
   const plans = planLValues(tx, frameId, branches.map(([key]) => key));
   const prepared = branches.map(([, slot]) => {
     const start = tx.readDependencies.length;
     const term = prepareBranchTerm(tx, frameId, slot);
     return { ...term, reads: [...new Set([...term.reads, ...tx.readDependencies.slice(start)])] };
   });
+
+  // R2 requires explicit warmup outside a multi-H family. A1 C-preparation
+  // semantics (including shared local lvalue materialization) remain accepted,
+  // but A2 must not silently perform a cold global host load while preparing H.
+  if (tx.profile === EXEC_PROFILE_A2 && branches.length > 1) {
+    const preparationTrace = tx.attemptedTrace.slice(preparationTraceStart);
+    if (preparationTrace.some(event => event.op === "host.load")) {
+      record(tx, {
+        op: "H-preparation",
+        frame: frameId,
+        status: "REJECT",
+        diagnostic: "H_UNPROVEN_INTERFERENCE"
+      });
+      reject("H_UNPROVEN_INTERFERENCE");
+    }
+  }
+
   const destinations = new Set(plans.map(plan => plan.slot.id));
   for (const branch of prepared) {
     if (branch.reads.some(id => destinations.has(id))) reject("H_READ_WRITE_CONFLICT");
