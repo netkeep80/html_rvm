@@ -62,8 +62,8 @@ test("Pages artifact includes all modules, exact version marker and root redirec
     const out = join(temp, "dist");
     const commit = "a".repeat(40);
     const result = buildPages(out, { commit, branch: "main", version: "01.04", legacyRegression:true });
-    assert.equal(result.files.length, 27);
-    for (const path of ["site/unified-studio.html", "site/unified-studio.css", "site/unified-studio.js", "site/unified-session.js", "research/pc1/j1-natural-json.mjs", "research/pc1/e1-witness.mjs"]) assert.ok(result.files.includes(path), path);
+    assert.equal(result.files.length, 28);
+    for (const path of ["site/unified-studio.html", "site/unified-studio.css", "site/unified-studio.js", "site/unified-session.js", "research/pc1/j1-natural-json.mjs", "research/pc1/e1-witness.mjs", "research/pc2/a1-contextual-json.mjs"]) assert.ok(result.files.includes(path), path);
     assert.ok(result.files.includes("site/mo-visual-graph.js"));
     assert.ok(result.files.includes("site/mo-projection-sync.js"));
     assert.ok(result.files.includes("site/mo-transition-observer.js"));
@@ -116,7 +116,7 @@ test("production Pages ships only the unified UI; legacy routes redirect",()=>{
    assert.doesNotMatch(content,/JSON Lab|V3|mo-studio-ui\.js/);
   }
   for(const path of ["site/styles.css","site/app.js","site/operations.js","site/mo-studio.css","site/mo-studio.js","site/mo-studio-ui.js","site/mo-visual-graph.js","site/mo-transition-observer.js"])assert.equal(existsSync(join(out,path)),false,path);
-  for(const path of ["site/unified-studio.html","site/unified-session.js","site/mo-projection-sync.js","src/memory-document-provider.js","src/working-session.js","research/pc1/j1-natural-json.mjs","research/pc1/e1-witness.mjs"])assert.ok(result.files.includes(path),path);
+  for(const path of ["site/unified-studio.html","site/unified-session.js","site/mo-projection-sync.js","src/memory-document-provider.js","src/working-session.js","research/pc1/j1-natural-json.mjs","research/pc1/e1-witness.mjs", "research/pc2/a1-contextual-json.mjs"])assert.ok(result.files.includes(path),path);
   for(const path of result.files)assert.ok(existsSync(join(out,path)),path);
  }finally{rmSync(tmp,{recursive:true,force:true})}
 });

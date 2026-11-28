@@ -1,5 +1,6 @@
+import { executePC2A2, snapshotPC2A1Session } from "../research/pc2/a1-contextual-json.mjs";
 import { cloneStrictJSON } from "../src/strict-json.js";
-import { N,P,Role,createMOState,executeMO,executeMOAtomically } from "../src/mo-core.js";
+import { N,P,Role,createMOState,executeMO,executeMOAtomically,sameEndpoint } from "../src/mo-core.js";
 import { subjectivateNaturalJSON, objectivateNaturalJSON, stepNaturalJSON, reflectiveReplaceRole, instantiateNaturalEntity } from "../research/pc1/j1-natural-json.mjs";
 import { serializeE1State,deserializeE1State,createE1State,validateE1State } from "../research/pc1/e1-witness.mjs";
 import {locateVPath,projectionOccurrences} from "./mo-projection-sync.js";
@@ -20,6 +21,54 @@ for (let mask = 0; mask < 8; mask++) {
 }
 
 examples.reflective=examples.where;
+const ref=address=>({$ref:address});
+const filterSource={filter:{$obj:[null,2,false,"4",{}],$rel:"where",$sub:{$obj:ref("$obj"),$rel:"is_string"}},patch:{$obj:"is_null",$rel:"=",$sub:ref("$ent/filter/$sub/$rel")},$rel:["$ent/filter","$ent/patch","$ent/filter"]};
+const pc2Examples={
+ "PC2 filter / patch / filter":filterSource,
+ "PC2 explicit references":{...filterSource,$rel:filterSource.$rel.map(ref)},
+ "PC2 PrepareFullReport fragment":{$rel:[{$obj:ref("#/eq_entity_name"),$rel:"="},{$obj:null,$rel:"="},{$obj:["$$obj/FileName","$$obj/param11/meas_count"],$rel:"foreachobj",$sub:[{"$rel/func":{"$rel/$obj":{$obj:ref("$obj"),$rel:"="},"$rel/$rel":{$obj:ref("#/eq_entity_name"),$rel:"="}}},"$rel/func"]}]},
+ "PC2 VIEW":{model:{$obj:42,$rel:"="},$rel:{$obj:ref("$ent/model"),$rel:"VIEW",$sub:ref("$rel/out")}},
+ "PC2 rollback":{$obj:[{x:1},{x:2}],$rel:"foreachobj",$sub:{$obj:9,$rel:"=",$sub:ref("$obj/x")}}
+};
+for(const controller of ["=","ALIAS"])pc2Examples["PC2 "+(controller==="="?"COPY":"ALIAS")]={a:{x:1},b:{x:2},$rel:[{$obj:ref("$ent/a"),$rel:controller,$sub:ref("$ent/b")},{$obj:9,$rel:"=",$sub:ref("$ent/a/x")},{"$rel/result":{$obj:ref("$ent/b"),$rel:"="}}]};
+for(const [name,value] of Object.entries(pc2Examples))examples[name]=JSON.stringify(value,null,2);
+export function exampleExecution(name){return {profile:Object.hasOwn(pc2Examples,name)?"PC2":"J1",registry:name==="PC2 PrepareFullReport fragment"?{"#":{eq_entity_name:"="}}:{}}}
+function initialPC2(program,registry){
+ const sourceRoot=program.state.mo.roots[0];
+ const anchor=program.state.mo.relations.get("j1:source-root");
+ if(!sourceRoot||!anchor?.bound||anchor.target?.sort!==sourceRoot.sort||anchor.target?.id!==sourceRoot.id)throw Error("SOURCE_ROOT_INCOHERENT");
+ return {state:program.state,sourceRoot,registry:new Map(Object.entries(cloneStrictJSON(registry))),namespace:new Map(),allocator:{N:1,P:1,F:1},host:{nextEntity:1}};
+}
+// A manual edit is a transaction over the adopted PC2 session, not just E1.
+ // The cached root duplets are host bindings; their descendants remain editable.
+function validatePC2Publication(session,previous=null){
+ const {state,sourceRoot,registry,namespace}=session;
+ const mo=state.mo,anchor=mo.relations.get("j1:source-root");
+ if(!mo.roots[0]||!anchor?.bound||!sameEndpoint(anchor.target,mo.roots[0])||!sameEndpoint(sourceRoot,mo.roots[0]))throw Error("SOURCE_ROOT_INCOHERENT");
+ for(const [name,id] of namespace){
+  const slot=mo.relations.get(id);
+  if(!registry.has(name)||!slot?.bound||!sameEndpoint(slot.owner,sourceRoot)||slot.label.kind!=="role"||slot.label.value!=="pc1:e1:duplet")throw Error("PC2_CACHE_SLOT_PROTECTED");
+  if(previous){
+   const old=previous.state.mo.relations.get(id);
+   if(!old?.bound||!sameEndpoint(old.owner,slot.owner)||!sameEndpoint(old.target,slot.target)||old.label.kind!==slot.label.kind||old.label.value!==slot.label.value)throw Error("PC2_CACHE_SLOT_PROTECTED");
+  }
+ }
+}
+function pc2Metrics(program,text,run,ms){
+ const state=run.session.state;
+ return {sourceBytes:text===null?null:new TextEncoder().encode(JSON.stringify(JSON.parse(text))).length,
+ before:{N:program.state.mo.nodes.size,P:program.state.mo.relations.size,frames:program.state.frames.size},
+ after:{N:state.mo.nodes.size,P:state.mo.relations.size,frames:state.frames.size},
+ committedEvents:run.committedTrace.length,attemptedEvents:run.attemptedTrace.length,
+ recordedMOActions:run.committedTrace.reduce((n,e)=>n+(e.actions?.length??(e.action?1:0)),0),elapsedMs:ms};
+}
+export function comparePC2Examples(){
+ return ["PC2 explicit references","PC2 filter / patch / filter"].map(name=>{
+  const s=createUnifiedSession(examples[name]);const run=s.runPC2();
+  return {name,result:run?.result??null,diagnostic:s.diagnostic,metrics:run?.metrics??null,
+   filters:run?.trace.filter(e=>e.op==="iterator-exit").map(e=>e.result)??[]};
+ });
+}
 examples.ent_abc=null;
 examples["sharing + cycles"]=null;
 const role=Role("pc1:e1:duplet");
@@ -169,10 +218,11 @@ export function networkPresentation(program,{applied=null,roles={},sourceControl
  rest.forEach((e,i)=>positions.set(displayKey(e),{x:treeLayout?76+i%cols*160:95+i%cols*180,y:baseY+Math.floor(i/cols)*76}));
  return {records:shown,positions,total:records.length,treeLayout};
 }
-export function createUnifiedSession(text = examples.where,{model=null}={}) {
+export function createUnifiedSession(text = examples.where,{model=null,registry={}}={}) {
  let applied=model??parseSource(text),appliedText=model?null:text,draft=appliedText;
  let branch=null,attempt=null,tentative=[],diagnostic=null,inspection=null,projectionDiagnostic=model?"MATHEMATICAL_EXAMPLE":null;
  let edits=[],runs=[],history=[],lastReject=null,projectionPartial=!!model;
+ let pc2=null;const initialRegistry=cloneStrictJSON(registry);
  const layout=new Map();
  function reset(){attempt?.return();attempt=null;tentative=[];branch=null;diagnostic=null;inspection=null;lastReject=null}
  function guard(){if(attempt||draft!==appliedText)throw Error("Stop or apply first")}
@@ -184,12 +234,29 @@ export function createUnifiedSession(text = examples.where,{model=null}={}) {
   const t=executeMOAtomically(applied.state.mo,actions);
   if(t.outcome.status!=="OK"){rejectAttempt("edit",t.outcome.diagnostic);return t}
   const state={...applied.state,mo:t.state};
-  try{validateE1State(state)}catch(e){rejectAttempt("edit",e.diagnostic??e.message);return {state:applied.state.mo,outcome:{status:"REJECT",diagnostic,semanticChange:false},trace:[]}}
-  publish({...applied,state});const edit={kind:"edit",actions,outcome:t.outcome,trace:t.trace};edits.push(edit);history.push(edit);return t;
+  try{validateE1State(state);publish({...applied,state})}catch(e){rejectAttempt("edit",e.diagnostic??e.message);return {state:applied.state.mo,outcome:{status:"REJECT",diagnostic,semanticChange:false},trace:[]}}
+  const edit={kind:"edit",actions,outcome:t.outcome,trace:t.trace};edits.push(edit);history.push(edit);return t;
  }
- function publish(program){let projection=null,error=null;
+ function publish(program,adopted=undefined){let projection=null,error=null;
+  const nextPC2=adopted===undefined?(pc2?{...pc2,state:program.state}:null):adopted;
+  if(nextPC2)validatePC2Publication(nextPC2,adopted===undefined?pc2:null);
   try{projection=JSON.stringify(objectivateNaturalJSON(program),null,2)}catch(e){error=e.diagnostic??e.message}
-  reset();applied=program;draft=appliedText=projection;projectionDiagnostic=error;projectionPartial=true;
+  reset();applied=program;pc2=nextPC2;draft=appliedText=projection;projectionDiagnostic=error;projectionPartial=true;
+ }
+ function runPC2(){
+  guard();if(!applied.state.mo.relations.has("j1:source-root"))throw Error("Natural JSON execution unavailable for this model");
+  reset();
+  const input=pc2?{...pc2,state:applied.state}:initialPC2(applied,initialRegistry);
+  const start=performance.now(),out=executePC2A2(input,{entry:"EXEC"}),ms=performance.now()-start;
+  if(out.diagnostic!==null){rejectAttempt("run",out.diagnostic);lastReject={...lastReject,profile:"PC2",attemptedTrace:out.attemptedTrace};return null}
+  const program={state:out.session.state,sourceRoot:out.session.sourceRoot};
+  const resultEndpoint=program.state.mo.relations.get(out.resultSlot.id).target;
+  branch={mode:"PC2 EXEC",profile:"PC2",program,pc2Session:out.session,result:out.result,resultEndpoint,resultSlot:out.resultSlot,hostFrame:out.hostFrame,events:[],snapshots:[],trace:out.committedTrace,sourceProgram:applied,sourceText:appliedText,metrics:pc2Metrics(applied,appliedText,out,ms)};
+  runs.push(branch);history.push({kind:"run",run:branch});return branch;
+ }
+ function adoptPC2(){
+  guard();if(branch?.profile!=="PC2")throw Error("No committed PC2 branch");
+  const next=branch;publish(next.program,next.pc2Session);return applied;
  }
  function step(env){
   if(!attempt){guard();if(appliedText===null||!applied.state.mo.relations.has("j1:source-root"))throw Error("Natural JSON execution unavailable for this model");
@@ -207,13 +274,16 @@ export function createUnifiedSession(text = examples.where,{model=null}={}) {
   get tentative(){return tentative.slice()},get diagnostic(){return diagnostic},get projectionDiagnostic(){return projectionDiagnostic},
   get inspection(){return inspection},get edits(){return edits.slice()},get runs(){return runs.slice()},get history(){return history.slice()},get lastReject(){return lastReject},
   get executable(){return appliedText!==null&&applied.state.mo.relations.has("j1:source-root")},
+  get pc2Executable(){return applied.state.mo.relations.has("j1:source-root")},
+  get pc2Snapshot(){return pc2?snapshotPC2A1Session(pc2):null},
+  runPC2,adoptPC2,
   get visible(){return tentative.at(-1)?.program??branch?.program??inspection?.program??applied},
   edit(text){if(attempt)throw Error("Stop execution before editing");draft=text},
-  apply(){if(attempt)throw Error("Stop execution before Apply");try{const next=parseSource(draft);reset();applied=next;appliedText=draft;projectionDiagnostic=null;projectionPartial=false;layout.clear();edits=[];runs=[];history=[];return true}catch(e){diagnostic=e.message;return false}},
+  apply(){if(attempt)throw Error("Stop execution before Apply");try{const next=parseSource(draft);reset();pc2=null;applied=next;appliedText=draft;projectionDiagnostic=null;projectionPartial=false;layout.clear();edits=[];runs=[];history=[];return true}catch(e){diagnostic=e.message;return false}},
   discard(){if(attempt)throw Error("Stop execution before discarding draft");draft=appliedText;diagnostic=null},
   reset,step,run(env){while(!step(env)){}return branch},
   inspect(){guard();if(!this.executable)throw Error("No Natural JSON context");inspection=instantiateNaturalEntity(applied);branch=null;diagnostic=null;return inspection},
-  reflect(path,role,value){guard();const edited=reflectiveReplaceRole(applied,path,role,value);publish(edited.program);const edit={kind:"Q",trace:edited.trace,identity:edited.sourceSlot};edits.push(edit);history.push(edit);return edited},
+  reflect(path,role,value){guard();const edited=reflectiveReplaceRole(applied,path,role,value);try{publish(edited.program)}catch(e){rejectAttempt("edit",e.diagnostic??e.message);throw e}const edit={kind:"Q",trace:edited.trace,identity:edited.sourceSlot};edits.push(edit);history.push(edit);return edited},
   endpoint(id,side,target){
    if(side!=="B"&&side!=="E")throw Error("Invalid endpoint side");
    return semanticActions([side==="B"?{op:"moveRelation",id,owner:target}:{op:"rebindRelation",id,target}]);
@@ -227,7 +297,7 @@ export function createUnifiedSession(text = examples.where,{model=null}={}) {
   atomic(actions){return semanticActions(actions)},
   stageDocument(text){guard();draft=text;return true},
   exportSource(){if(appliedText===null)throw Error("Natural JSON projection unavailable");return appliedText},
-  importExact(text){guard();try{const state=deserializeE1State(text);publish({state});layout.clear();edits=[];runs=[];history=[];return true}catch(e){diagnostic=e.message;return false}},
+  importExact(text){guard();try{const state=deserializeE1State(text);pc2=null;publish({state});layout.clear();edits=[];runs=[];history=[];return true}catch(e){diagnostic=e.message;return false}},
   lossless(){return serializeE1State(applied.state)}
  };
 }

@@ -180,5 +180,37 @@ try{
 
 
 
+ await send("Emulation.setDeviceMetricsOverride",{width:1440,height:1200,deviceScaleFactor:1,mobile:false});await frame();
+ await set("example","PC2 filter / patch / filter","change");
+ check(await evalv("document.getElementById('execution-profile').value==='PC2'&&document.getElementById('step').disabled"),"PC2 explicit profile and no fake Step");
+ const pc2Before=await exact();await clickId("run");
+ check(await evalv("document.getElementById('mode').textContent==='PC2 EXEC'&&JSON.parse(document.getElementById('result').textContent)[0]===null&&document.querySelectorAll('[data-pc2-event]').length===183"),"real PC2 filter patch filter");
+ check((await exact())===pc2Before,"PC2 branch does not mutate applied state");
+ await clickPoint(await pos('[data-pc2-event="0"]'));
+ check(await evalv("JSON.parse(document.getElementById('transition-detail').textContent).state==='FINAL'"),"PC2 trace is final-state inspection");
+ await clickId("adopt-pc2");check(await evalv("JSON.parse(document.getElementById('source').value).filter.$sub.$rel==='is_null'"),"adopt reflected source");
+ await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent)[0]===null"),"execute adopted session");
+ await shot("07-pc2-reflection","header");
+ await set("example","PC2 PrepareFullReport fragment","change");await clickId("run");
+ check(await evalv("JSON.stringify(JSON.parse(document.getElementById('result').textContent))===JSON.stringify(['$$obj/FileName','$$obj/param11/meas_count'])"),"historical two-column fragment");
+ // Identify the real loaded namespace slot from the committed trace, not a fixed ID.
+ const loadButton=await evalv("Array.from(document.querySelectorAll('[data-pc2-event]')).find(b=>b.textContent.endsWith('host.load')).dataset.pc2Event");
+ await clickPoint(await pos('[data-pc2-event="'+loadButton+'"]'));
+ const cacheSlot=await evalv("JSON.parse(document.getElementById('transition-detail').textContent).event.slot");
+ await clickId("adopt-pc2");const cacheBefore=await exact(),cacheSource=await evalv("document.getElementById('source').value");
+ await evalv("document.getElementById('advanced-actions').closest('details').open=true;true");
+ await set("advanced-actions",JSON.stringify([{op:"deleteRelation",id:cacheSlot}]));await clickId("advanced-apply");
+ check((await exact())===cacheBefore&&await evalv("document.getElementById('last-reject').textContent.includes('PC2_CACHE_SLOT_PROTECTED')"),"PC2 adopted cache deletion rejected by real R0 editor");
+ check((await evalv("document.getElementById('source').value"))===cacheSource,"PC2 rejected edit preserves source");
+ await clickId("run");
+ check(await evalv("JSON.stringify(JSON.parse(document.getElementById('result').textContent))===JSON.stringify(['$$obj/FileName','$$obj/param11/meas_count'])&&Array.from(document.querySelectorAll('[data-pc2-event]')).some(b=>b.textContent.endsWith('host.cache-hit'))"),"PC2 rerun after editor reject uses cached namespace");
+ await shot("08-pc2-cache-reject","header");
+ await set("example","PC2 rollback","change");const pc2RejectBefore=await exact();await clickId("run");
+ check((await exact())===pc2RejectBefore&&await evalv("document.getElementById('last-reject').textContent.includes('ITERATOR_FOREIGN_WRITE')&&document.querySelector('[data-pc2-event]').textContent.startsWith('ATTEMPT')"),"PC2 atomic reject with attempted trace");
+ await set("example","PC2 COPY","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).result.x===1"),"PC2 COPY");
+ await set("example","PC2 ALIAS","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).result.x===9"),"PC2 ALIAS");
+ await set("example","PC2 VIEW","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).out===42"),"PC2 VIEW");
+ await evalv("document.getElementById('compare-pc2').closest('details').open=true;true");await clickId("compare-pc2");
+ check(await evalv("(()=>{const [a,b]=JSON.parse(document.getElementById('pc2-comparison').textContent);return a.metrics.sourceBytes===262&&b.metrics.sourceBytes===235&&JSON.stringify(a.filters)===JSON.stringify(b.filters)})()"),"actual PC2 comparison");
  console.log("Unified Studio checks:",n);
 }finally{ws?.close();if(browser&&browser.exitCode===null&&browser.signalCode===null){const closed=new Promise(r=>browser.once("close",r));browser.kill();await Promise.race([closed,sleep(3000)]);if(browser.exitCode===null&&browser.signalCode===null){browser.kill("SIGKILL");await Promise.race([closed,sleep(1000)]);}}server.closeAllConnections();await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true,maxRetries:10,retryDelay:150});}

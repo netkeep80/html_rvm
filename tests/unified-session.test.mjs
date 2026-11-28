@@ -202,3 +202,84 @@ test("P2-03: latest import wins in both completion orders, cancellation and read
  assert.equal(await c.request(()=>Promise.reject(Error("read failed")),v=>log.push(v),e=>log.push(e.message)),"REJECT");
  assert.deepEqual(log,["read failed"]);
 });
+
+
+test("PC2 Studio real live branch, adoption, identity preservation and repeat",()=>{
+ const s=createUnifiedSession(examples["PC2 filter / patch / filter"]);
+ const before=s.lossless(),first=s.runPC2();assert.deepEqual(first.result,[null]);assert.equal(s.lossless(),before);
+ const exits=first.trace.filter(e=>e.op==="iterator-exit");assert.deepEqual(exits.map(e=>e.result),[["4"],[null]]);
+ const inv=first.trace.filter(e=>e.op==="exec-address"&&e.address==="$ent/filter");assert.equal(inv.length,2);assert.equal(inv[0].slot,inv[1].slot);
+ s.adoptPC2();assert.equal(JSON.parse(s.appliedText).filter.$sub.$rel,"is_null");assert.ok(s.pc2Snapshot);
+ assert.equal(s.applied.state,first.pc2Session.state);
+ const second=s.runPC2();assert.deepEqual(second.trace.filter(e=>e.op==="iterator-exit").map(e=>e.result),[[null],[null]]);
+ assert.equal(second.trace.find(e=>e.op==="exec-address"&&e.address==="$ent/filter").slot,inv[0].slot);
+ assert.notEqual(second.hostFrame,first.hostFrame);s.reset();assert.equal(s.applied.state,first.pc2Session.state);
+});
+test("PC2 Studio historical fragment, COPY ALIAS VIEW and attempted trace",()=>{
+ const fragment=createUnifiedSession(examples["PC2 PrepareFullReport fragment"],{registry:{"#":{eq_entity_name:"="}}});
+ assert.deepEqual(fragment.runPC2().result,["$$obj/FileName","$$obj/param11/meas_count"]);
+ for(const [name,result] of [["PC2 COPY",{result:{x:1}}],["PC2 ALIAS",{result:{x:9}}],["PC2 VIEW",{out:42}]]){
+  const s=createUnifiedSession(examples[name]);assert.deepEqual(s.runPC2().result,result);
+ }
+ const s=createUnifiedSession(examples["PC2 rollback"]),before=s.lossless();
+ assert.equal(s.runPC2(),null);assert.equal(s.lossless(),before);assert.equal(s.lastReject.diagnostic,"ITERATOR_FOREIGN_WRITE");assert.ok(s.lastReject.attemptedTrace.length);assert.equal(s.history.length,0);
+});
+test("PC2 Studio compactness uses actual independent runs",async()=>{
+ const {comparePC2Examples}=await import("../site/unified-session.js");const [a,b]=comparePC2Examples();
+ assert.equal(a.metrics.sourceBytes,262);assert.equal(b.metrics.sourceBytes,235);assert.deepEqual(a.filters,b.filters);assert.deepEqual(a.result,b.result);
+});
+
+test("PC2 Studio adoption carries host registry and allocator, reset and rejection are isolated",()=>{
+ const s=createUnifiedSession('{"$obj":{"v":7},"$rel":"add_entity"}');
+ const a=s.runPC2();assert.equal(a.result,"pc2-ent-1");
+ s.adoptPC2();const snapshot=s.pc2Snapshot;assert.ok(snapshot.includes("pc2-ent-1"));
+ const b=s.runPC2();assert.equal(b.result,"pc2-ent-2");s.reset();assert.equal(s.pc2Snapshot,snapshot);
+ assert.equal(s.runPC2().result,"pc2-ent-2");s.reset();
+ s.edit('{"$obj":{"v":7},"$rel":"add_entity"}');assert.equal(s.apply(),true);assert.equal(s.pc2Snapshot,null);assert.equal(s.runPC2().result,"pc2-ent-1");
+});
+
+function cachedFragment(){
+ const s=createUnifiedSession(examples["PC2 PrepareFullReport fragment"],{registry:{"#":{eq_entity_name:"=",note:1}}});
+ const run=s.runPC2();assert.ok(run);s.adoptPC2();
+ const id=run.pc2Session.namespace.get("#");assert.ok(id);
+ return {s,id,slot:s.applied.state.mo.relations.get(id)};
+}
+test("PC2 Studio cache root deletion, unbinding, redirection, owner and label edits are atomic rejects",()=>{
+ const {s,id,slot}=cachedFragment();
+ const before=s.pc2Snapshot,program=s.applied,source=s.appliedText,history=s.history,edits=s.edits,runs=s.runs;
+ const root=s.applied.state.mo.roots[0];
+ for(const edit of [
+  ()=>s.remove({sort:"P",id}),
+  ()=>s.atomic([{op:"rebindRelation",id,target:null}]),
+  ()=>s.endpoint(id,"E",root),
+  ()=>s.endpoint(id,"B",slot.target),
+  ()=>s.atomic([{op:"relabelRelation",id,label:{kind:"role",value:"other"}}]),
+  ()=>s.atomic([{op:"createNode",id:"test:rejected",kind:"number",payload:7},{op:"deleteRelation",id}])
+ ]){
+  const t=edit();assert.equal(t.outcome.status,"REJECT");assert.equal(t.outcome.diagnostic,"PC2_CACHE_SLOT_PROTECTED");assert.equal(t.outcome.semanticChange,false);assert.deepEqual(t.trace,[]);
+  assert.equal(t.state,program.state.mo);assert.equal(s.applied,program);assert.equal(s.pc2Snapshot,before);assert.equal(s.appliedText,source);assert.equal(s.draft,source);
+  assert.deepEqual(s.history,history);assert.deepEqual(s.edits,edits);assert.deepEqual(s.runs,runs);
+ }
+ const again=s.runPC2();assert.ok(again);assert.deepEqual(again.result,["$$obj/FileName","$$obj/param11/meas_count"]);
+ assert.ok(again.trace.some(e=>e.op==="host.cache-hit"&&e.name==="#"&&e.slot===id));assert.ok(!again.trace.some(e=>e.op==="host.load"&&e.name==="#"));
+});
+test("PC2 Studio legal cache descendant edit preserves bindings and host structures",()=>{
+ const {s,id,slot}=cachedFragment();
+ const before=JSON.parse(s.pc2Snapshot);
+ const member=[...s.applied.state.mo.relations.values()].find(r=>r.owner.id===slot.target.id&&r.owner.sort===slot.target.sort&&r.label.kind==="key"&&r.label.value==="note");
+ assert.ok(member);const t=s.atomic([{op:"setNode",id:member.target.id,kind:"number",payload:2}]);assert.equal(t.outcome.status,"OK");
+ const after=JSON.parse(s.pc2Snapshot);
+ for(const k of ["registry","namespace","sourceRoot","allocator","host"])assert.deepEqual(after[k],before[k]);
+ assert.equal(s.applied.state.mo.nodes.get(member.target.id).payload,2);
+ const again=s.runPC2();assert.ok(again);assert.ok(again.trace.some(e=>e.op==="host.cache-hit"&&e.slot===id));assert.equal(again.pc2Session.state.mo.nodes.get(member.target.id).payload,2);
+});
+test("PC2 Studio adopted source reflection remains executable and retains source controller identity",()=>{
+ const s=createUnifiedSession(examples["PC2 filter / patch / filter"]);s.runPC2();s.adoptPC2();
+ const before=JSON.parse(s.pc2Snapshot);
+ const e=s.reflect(["filter","$sub"],"R","is_string");
+ const after=JSON.parse(s.pc2Snapshot);
+ for(const k of ["registry","namespace","sourceRoot","allocator","host"])assert.deepEqual(after[k],before[k]);
+ assert.equal(JSON.parse(s.appliedText).filter.$sub.$rel,"is_string");
+ const run=s.runPC2();assert.ok(run);assert.deepEqual(run.trace.filter(e=>e.op==="iterator-exit").map(e=>e.result),[["4"],[null]]);
+ assert.ok(run.pc2Session.state.mo.relations.has(e.sourceSlot.id));
+});
