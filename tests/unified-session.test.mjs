@@ -271,7 +271,7 @@ test("PC2 Studio legal cache descendant edit preserves bindings and host structu
  const after=JSON.parse(s.pc2Snapshot);
  for(const k of ["registry","namespace","sourceRoot","allocator","host"])assert.deepEqual(after[k],before[k]);
  assert.equal(s.applied.state.mo.nodes.get(member.target.id).payload,2);
- const again=s.runPC2();assert.ok(again);assert.ok(again.trace.some(e=>e.op==="host.cache-hit"&&e.slot===id));assert.equal(again.session.state.mo.nodes.get(member.target.id).payload,2);
+ const again=s.runPC2();assert.ok(again);assert.ok(again.trace.some(e=>e.op==="host.cache-hit"&&e.slot===id));assert.equal(again.pc2Session.state.mo.nodes.get(member.target.id).payload,2);
 });
 test("PC2 Studio adopted source reflection remains executable and retains source controller identity",()=>{
  const s=createUnifiedSession(examples["PC2 filter / patch / filter"]);s.runPC2();s.adoptPC2();
@@ -281,5 +281,5 @@ test("PC2 Studio adopted source reflection remains executable and retains source
  for(const k of ["registry","namespace","sourceRoot","allocator","host"])assert.deepEqual(after[k],before[k]);
  assert.equal(JSON.parse(s.appliedText).filter.$sub.$rel,"is_string");
  const run=s.runPC2();assert.ok(run);assert.deepEqual(run.trace.filter(e=>e.op==="iterator-exit").map(e=>e.result),[["4"],[null]]);
- assert.ok(run.session.state.mo.relations.has(e.sourceSlot.id));
+ assert.ok(run.pc2Session.state.mo.relations.has(e.sourceSlot.id));
 });
