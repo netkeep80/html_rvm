@@ -22,8 +22,13 @@ import { subjectivateNaturalJSON } from "../pc1/j1-natural-json.mjs";
 export const PC2_A1_ROOT_SOURCE_SLOT = "j1:source-root";
 const ROLE_KEY = Object.freeze({ O: "$obj", R: "$rel", S: "$sub" });
 const ROLE_NAME = Object.freeze({ ent: "E", obj: "O", rel: "R", sub: "S" });
-const ADMITTED_PRIMITIVES = new Set(["=", "add_entity"]);
+const A1_ADMITTED_PRIMITIVES = new Set(["=", "add_entity"]);
+const A2_ADMITTED_PRIMITIVES = new Set([
+  "=", "add_entity", "is_string", "is_null", "where", "foreachobj", "ALIAS", "VIEW"
+]);
 const DEFAULT_EXECUTION_FUEL = 512;
+const EXEC_PROFILE_A1 = "A1";
+const EXEC_PROFILE_A2 = "A2_EXEC";
 
 export class PC2A1Reject extends Error {
   constructor(diagnostic, message = diagnostic) {
@@ -72,12 +77,41 @@ function committedSession(tx) {
   };
 }
 
-function beginTransaction(session) {
-  return { ...cloneSession(session), attemptedTrace: [], readDependencies: [], executionFuel: DEFAULT_EXECUTION_FUEL };
+function cloneCapability(capability) {
+  if (!capability) return null;
+  return {
+    ...capability,
+    ownedP: new Set(capability.ownedP ?? []),
+    ownedN: new Set(capability.ownedN ?? []),
+    forbiddenReadP: new Set(capability.forbiddenReadP ?? []),
+    forbiddenReadN: new Set(capability.forbiddenReadN ?? [])
+  };
+}
+
+function beginTransaction(session, { profile = EXEC_PROFILE_A1 } = {}) {
+  const tx = {
+    ...cloneSession(session),
+    attemptedTrace: [],
+    readDependencies: [],
+    profile,
+    capability: null
+  };
+  if (profile === EXEC_PROFILE_A2) tx.executionBudget = { remaining: DEFAULT_EXECUTION_FUEL };
+  else tx.executionFuel = DEFAULT_EXECUTION_FUEL;
+  return tx;
 }
 
 function beginProbeTransaction(tx) {
-  return { ...cloneSession(tx), attemptedTrace: [], readDependencies: [], executionFuel: tx.executionFuel };
+  const probe = {
+    ...cloneSession(tx),
+    attemptedTrace: [],
+    readDependencies: [],
+    profile: tx.profile ?? EXEC_PROFILE_A1,
+    capability: cloneCapability(tx.capability)
+  };
+  if (tx.executionBudget) probe.executionBudget = tx.executionBudget;
+  else probe.executionFuel = tx.executionFuel;
+  return probe;
 }
 
 function record(tx, event) {
@@ -98,8 +132,17 @@ function observeReads(tx, ids) {
   for (const id of ids) tx.readDependencies.push(id);
 }
 
+function guardCapabilityRead(context, slot, relation) {
+  if (!context.capability) return;
+  if (context.capability.forbiddenReadP?.has(slot.id)) reject("ITERATOR_UNPROVEN_EFFECT");
+  if (relation.target.sort === "N" && context.capability.forbiddenReadN?.has(relation.target.id)) {
+    reject("ITERATOR_UNPROVEN_EFFECT");
+  }
+}
+
 function readRelation(tx, slot) {
   const relation = requireRelation(tx.state, slot);
+  guardCapabilityRead(tx, slot, relation);
   observeReads(tx, [slot.id]);
   return relation;
 }
@@ -181,21 +224,62 @@ function nodeAction(id, value) {
   reject("INVALID_JSON_VALUE");
 }
 
+function capabilityShadow(tx) {
+  if (!tx.capability) return null;
+  return {
+    ownedP: new Set(tx.capability.ownedP),
+    ownedN: new Set(tx.capability.ownedN)
+  };
+}
+
+function authorizeCapabilityAction(tx, action, shadow) {
+  if (!tx.capability) return;
+  if (action.op === "createNode") {
+    shadow.ownedN.add(action.id);
+    return;
+  }
+  if (action.op === "createRelation") {
+    const ownerAllowed = action.owner?.sort === "N"
+      ? shadow.ownedN.has(action.owner.id)
+      : action.owner?.sort === "P" && shadow.ownedP.has(action.owner.id);
+    if (!ownerAllowed) reject("ITERATOR_FOREIGN_WRITE");
+    shadow.ownedP.add(action.id);
+    return;
+  }
+  if (action.op === "rebindRelation" || action.op === "unbindRelation" || action.op === "deleteRelation") {
+    if (!shadow.ownedP.has(action.id)) reject("ITERATOR_FOREIGN_WRITE");
+    return;
+  }
+  reject("ITERATOR_UNPROVEN_EFFECT");
+}
+
+function commitCapabilityShadow(tx, shadow) {
+  if (!tx.capability || !shadow) return;
+  tx.capability.ownedP = shadow.ownedP;
+  tx.capability.ownedN = shadow.ownedN;
+}
+
 function applyAtomicMO(tx, actions, kind) {
+  const shadow = capabilityShadow(tx);
+  if (shadow) for (const action of actions) authorizeCapabilityAction(tx, action, shadow);
   const result = executeMOAtomically(tx.state.mo, actions);
   record(tx, { op: kind, actions: actions.map(action => ({ ...action })), status: result.outcome.status, diagnostic: result.outcome.diagnostic });
   if (result.outcome.status !== "OK") reject(result.outcome.diagnostic ?? "MO_REJECT");
   tx.state = { ...tx.state, mo: result.state };
+  commitCapabilityShadow(tx, shadow);
   validateE1State(tx.state);
   assertCanonicalSourceRoot(tx);
   return result;
 }
 
 function applyOneMO(tx, action, kind) {
+  const shadow = capabilityShadow(tx);
+  if (shadow) authorizeCapabilityAction(tx, action, shadow);
   const result = executeMO(tx.state.mo, action);
   record(tx, { op: kind, action: { ...action }, status: result.outcome.status, diagnostic: result.outcome.diagnostic });
   if (result.outcome.status !== "OK") reject(result.outcome.diagnostic ?? "MO_REJECT");
   tx.state = { ...tx.state, mo: result.state };
+  commitCapabilityShadow(tx, shadow);
   validateE1State(tx.state);
   assertCanonicalSourceRoot(tx);
   return result;
@@ -231,6 +315,7 @@ function appendJSON(tx, value, label = "append-json") {
 }
 
 function createRuntimeSlot(tx, initial, kind = "runtime-slot") {
+  if (tx.capability) reject("ITERATOR_UNPROVEN_EFFECT");
   const id = freshRelation(tx);
   const created = createDuplet(tx.state, { id, begin: canonicalSourceRootFromState(tx.state), end: initial });
   record(tx, { op: kind, id, status: created.outcome.status, diagnostic: created.outcome.diagnostic });
@@ -318,7 +403,8 @@ function rootSlotForParsed(context, frameId, parsed) {
     }
     slot = P(frame.roles[parsed.role]);
   }
-  requireRelation(context.state, slot);
+  const relation = requireRelation(context.state, slot);
+  guardCapabilityRead(context, slot, relation);
   return slot;
 }
 
@@ -355,6 +441,7 @@ function resolveParsedExisting(context, frameId, parsed) {
     const [id, member] = matches[0];
     if (!member.bound) reject("UNBOUND_SLOT");
     slot = P(id);
+    guardCapabilityRead(context, slot, member);
     readSlots.push(id);
   }
   return { slot, readSlots, parsed };
@@ -369,6 +456,7 @@ function stageLoadNamespace(tx, name) {
     record(tx, { op: "host.cache-hit", name, slot: tx.namespace.get(name) });
     return P(tx.namespace.get(name));
   }
+  if (tx.capability) reject("ITERATOR_UNPROVEN_EFFECT");
   if (!tx.registry.has(name)) {
     record(tx, { op: "host.load", name, status: "REJECT", diagnostic: "GLOBAL_NOT_FOUND" });
     reject("GLOBAL_NOT_FOUND");
@@ -533,6 +621,13 @@ function writeScalarToR(tx, frameId, value) {
   record(tx, { op: "scalar", frame: frameId, R: slot.id, value });
 }
 
+function writePredicateToS(tx, frameId, value) {
+  const endpoint = appendJSON(tx, value, "predicate-copy");
+  const slot = frameRoleSlot(tx.state, frameId, "S");
+  guardedRebind(tx, slot, endpoint, "predicate-write");
+  record(tx, { op: "predicate", frame: frameId, S: slot.id, value });
+}
+
 function normalizePublicPSlot(value) {
   if (typeof value === "string") return P(value);
   if (!value || typeof value !== "object" || value.sort !== "P" || typeof value.id !== "string") {
@@ -606,10 +701,289 @@ function primitiveAddEntity(tx, frameId) {
   record(tx, { op: "add_entity", frame: frameId, O: O.id, S: S.id, name, status: "OK" });
 }
 
+function primitivePredicateKind(tx, frameId, expectedKind) {
+  const O = frameRoleSlot(tx.state, frameId, "O");
+  const relation = readRelation(tx, O);
+  const value = relation.target.sort === "N" ? tx.state.mo.nodes.get(relation.target.id) : null;
+  return writePredicateToS(tx, frameId, value?.kind === expectedKind);
+}
+
+function aliasSlots(tx, O, S, frameId = null) {
+  const source = readRelation(tx, O);
+  const target = readRelation(tx, S);
+  if (O.id === S.id || sameEndpoint(source.target, target.target)) {
+    record(tx, { op: "alias", frame: frameId, O: O.id, S: S.id, status: "NOOP" });
+    return;
+  }
+  if (tx.capability) reject("ITERATOR_UNPROVEN_EFFECT");
+  guardedRebind(tx, S, endpointCopy(source.target), "alias-rebind");
+  record(tx, { op: "alias", frame: frameId, O: O.id, S: S.id, status: "OK" });
+}
+
+function primitiveAlias(tx, frameId) {
+  aliasSlots(tx, frameRoleSlot(tx.state, frameId, "O"), frameRoleSlot(tx.state, frameId, "S"), frameId);
+}
+
+function primitiveView(tx, frameId) {
+  const current = frameRecord(tx.state, frameId);
+  if (current.parent === null) reject("VIEW_PARENT_REQUIRED");
+  const parent = frameRecord(tx.state, current.parent);
+  const view = createFrameTx(tx, {
+    E: parent.roles.E,
+    O: parent.roles.O,
+    R: current.roles.S,
+    S: parent.roles.S
+  }, current.parent, "VIEW");
+  record(tx, {
+    op: "view-enter",
+    from: frameId,
+    to: view,
+    parent: current.parent,
+    model: current.roles.O,
+    R: current.roles.S
+  });
+  return executeSlot(tx, view, P(current.roles.O));
+}
+
+function collectStructuralClosure(tx, rootSlot) {
+  const root = readRelation(tx, rootSlot);
+  const Pset = new Set([rootSlot.id]);
+  const Nset = new Set();
+  const stack = [endpointCopy(root.target)];
+  while (stack.length) {
+    const endpoint = stack.pop();
+    if (endpoint.sort !== "N") reject("ITERATOR_NONPROJECTABLE");
+    if (Nset.has(endpoint.id)) continue;
+    const node = tx.state.mo.nodes.get(endpoint.id);
+    if (!node) reject("ITERATOR_NONPROJECTABLE");
+    Nset.add(endpoint.id);
+    for (const [id, relation] of structuralRelations(tx.state, endpoint)) {
+      if (!relation.bound || relation.target.sort !== "N") reject("ITERATOR_NONPROJECTABLE");
+      Pset.add(id);
+      observeReads(tx, [id]);
+      stack.push(endpointCopy(relation.target));
+    }
+  }
+  return { P: Pset, N: Nset };
+}
+
+function setIntersects(a, b) {
+  for (const value of a) if (b.has(value)) return true;
+  return false;
+}
+
+function compoundIntersection(tx, a, b) {
+  for (const id of a) {
+    if (!b.has(id)) continue;
+    const kind = tx.state.mo.nodes.get(id)?.kind;
+    if (kind === "array" || kind === "object") return true;
+  }
+  return false;
+}
+
+function iteratorPreflight(tx, frameId, kind) {
+  if (tx.capability) reject("ITERATOR_UNPROVEN_EFFECT");
+  const frame = frameRecord(tx.state, frameId);
+  if (frame.parent === null) reject("ITERATOR_PARENT_REQUIRED");
+  const E = P(frame.roles.E);
+  const O = P(frame.roles.O);
+  const R = P(frame.roles.R);
+  const S = P(frame.roles.S);
+  for (const slot of [E, O, R, S]) requireRelation(tx.state, slot);
+  if (R.id === PC2_A1_ROOT_SOURCE_SLOT || R.id === O.id || R.id === S.id || R.id === E.id) {
+    reject("ITERATOR_OUTPUT_OVERLAP");
+  }
+
+  const inputClosure = collectStructuralClosure(tx, O);
+  const modelClosureE = collectStructuralClosure(tx, E);
+  const modelClosureS = collectStructuralClosure(tx, S);
+  const outputClosure = collectStructuralClosure(tx, R);
+  const protectedP = new Set([...inputClosure.P, ...modelClosureE.P, ...modelClosureS.P]);
+  const protectedN = new Set([...inputClosure.N, ...modelClosureE.N, ...modelClosureS.N]);
+  if (protectedP.has(R.id) || setIntersects(outputClosure.P, protectedP) ||
+      compoundIntersection(tx, outputClosure.N, protectedN)) {
+    reject("ITERATOR_OUTPUT_OVERLAP");
+  }
+
+  const inputRelation = readRelation(tx, O);
+  let items;
+  if (inputRelation.target.sort !== "N") reject("ITERATOR_INPUT_REQUIRED");
+  // Bounded A2 iterators admit only the full finite plain-JSON image. This is
+  // intentionally stricter than legal R0 MO state (which may contain cycles,
+  // sharing and structurally decorated scalar nodes).
+  projectValue(tx, inputRelation.target);
+  const inputNode = tx.state.mo.nodes.get(inputRelation.target.id);
+  if (kind === "where" && inputNode?.kind === "null") items = [];
+  else {
+    if (inputNode?.kind !== "array") {
+      if (kind === "foreachobj" && inputNode?.kind === "null") reject("ITERATOR_INPUT_REQUIRED");
+      reject("ARRAY_REQUIRED");
+    }
+    items = arrayMembers(tx.state, inputRelation.target);
+  }
+
+  const outputRelation = readRelation(tx, R);
+  if (outputRelation.target.sort !== "N") reject("ITERATOR_OUTPUT_INVALID");
+  // The previous output value is part of iterator admission even though it is
+  // replaced on success. Reject a cyclic/non-JSON old value before iterator-enter.
+  projectValue(tx, outputRelation.target);
+  const outputNode = tx.state.mo.nodes.get(outputRelation.target.id);
+  if (kind === "where") {
+    if (outputNode?.kind !== "null" && outputNode?.kind !== "array") reject("ITERATOR_OUTPUT_INVALID");
+    if (outputNode?.kind === "array") arrayMembers(tx.state, outputRelation.target);
+  } else {
+    if (outputNode?.kind !== "null" && outputNode?.kind !== "array") reject("ITERATOR_OUTPUT_INVALID");
+    if (outputNode?.kind === "array" && arrayMembers(tx.state, outputRelation.target).length !== 0) {
+      reject("ITERATOR_OUTPUT_NOT_EMPTY");
+    }
+  }
+
+  record(tx, {
+    op: "iterator-enter",
+    kind,
+    frame: frameId,
+    E: E.id,
+    O: O.id,
+    R: R.id,
+    S: S.id,
+    count: items.length
+  });
+  const freshArray = appendJSON(tx, [], `${kind}-output-array`);
+  guardedRebind(tx, R, freshArray, `${kind}-output-reset`);
+  return { frame, E, O, R, S, items, outputArray: freshArray };
+}
+
+function createIteratorIndex(tx, outputSlot, index, kind) {
+  const output = readRelation(tx, outputSlot);
+  if (output.target.sort !== "N" || tx.state.mo.nodes.get(output.target.id)?.kind !== "array") {
+    reject("ITERATOR_OUTPUT_INVALID");
+  }
+  const initial = appendJSON(tx, null, `${kind}-item-null`);
+  const id = freshRelation(tx);
+  applyOneMO(tx, {
+    op: "createRelation",
+    id,
+    owner: endpointCopy(output.target),
+    label: Index(index),
+    target: initial
+  }, `${kind}-item-index`);
+  return P(id);
+}
+
+function withIteratorCapability(tx, capability, fn) {
+  const previous = tx.capability;
+  tx.capability = capability;
+  try {
+    return fn();
+  } finally {
+    tx.capability = previous;
+  }
+}
+
+function itemCapability(resultP, outputP, outputN, previousP, previousN, itemIndex) {
+  return {
+    kind: "iterator-item",
+    itemIndex,
+    ownedP: new Set([resultP.id]),
+    ownedN: new Set(),
+    forbiddenReadP: new Set([outputP.id, ...previousP]),
+    forbiddenReadN: new Set([outputN.id, ...previousN])
+  };
+}
+
+function primitiveWhere(tx, frameId) {
+  const prep = iteratorPreflight(tx, frameId, "where");
+  const previousP = [];
+  const previousN = [];
+  let outputIndex = 0;
+  for (let i = 0; i < prep.items.length; i += 1) {
+    const itemP = prep.items[i];
+    consumeExecutionFuel(tx, frameId, itemP);
+    const boolEndpoint = appendJSON(tx, null, "where-bool-null");
+    const boolP = createRuntimeSlot(tx, boolEndpoint, "where-bool-slot");
+    const itemFrame = createFrameTx(tx, {
+      E: prep.E.id,
+      O: itemP.id,
+      R: boolP.id,
+      S: boolP.id
+    }, prep.frame.parent, "where-item");
+    record(tx, { op: "iterator-item", kind: "where", index: i, frame: itemFrame, O: itemP.id, R: boolP.id, S: boolP.id });
+    const cap = itemCapability(boolP, prep.R, prep.outputArray, previousP, previousN, i);
+    withIteratorCapability(tx, cap, () => executeSlot(tx, itemFrame, prep.S));
+
+    const boolRelation = readRelation(tx, boolP);
+    const boolNode = boolRelation.target.sort === "N" ? tx.state.mo.nodes.get(boolRelation.target.id) : null;
+    if (boolNode?.kind !== "boolean" || boolNode.payload !== true) continue;
+
+    const outP = createIteratorIndex(tx, prep.R, outputIndex++, "where");
+    copySlots(tx, itemP, outP, itemFrame);
+    const outRel = readRelation(tx, outP);
+    previousP.push(outP.id);
+    if (outRel.target.sort === "N") previousN.push(outRel.target.id);
+  }
+  const resultRelation = readRelation(tx, prep.R);
+  record(tx, {
+    op: "iterator-exit",
+    kind: "where",
+    frame: frameId,
+    R: prep.R.id,
+    result: projectValue(tx, resultRelation.target)
+  });
+}
+
+function primitiveForeach(tx, frameId) {
+  const prep = iteratorPreflight(tx, frameId, "foreachobj");
+  const previousP = [];
+  const previousN = [];
+  for (let i = 0; i < prep.items.length; i += 1) {
+    consumeExecutionFuel(tx, frameId, prep.items[i]);
+    // Iterator allocator creates exactly one fresh result occurrence before body execution.
+    const resultP = createIteratorIndex(tx, prep.R, i, "foreachobj");
+    const itemFrame = createFrameTx(tx, {
+      E: prep.E.id,
+      O: prep.items[i].id,
+      R: resultP.id,
+      S: resultP.id
+    }, prep.frame.parent, "foreach-item");
+    record(tx, {
+      op: "iterator-item",
+      kind: "foreachobj",
+      index: i,
+      frame: itemFrame,
+      O: prep.items[i].id,
+      R: resultP.id,
+      S: resultP.id
+    });
+    const cap = itemCapability(resultP, prep.R, prep.outputArray, previousP, previousN, i);
+    withIteratorCapability(tx, cap, () => executeSlot(tx, itemFrame, prep.S));
+    const resultRelation = readRelation(tx, resultP);
+    previousP.push(resultP.id);
+    if (resultRelation.target.sort === "N") previousN.push(resultRelation.target.id);
+  }
+  const outputRelation = readRelation(tx, prep.R);
+  record(tx, {
+    op: "iterator-exit",
+    kind: "foreachobj",
+    frame: frameId,
+    R: prep.R.id,
+    result: projectValue(tx, outputRelation.target)
+  });
+}
+
 function dispatchPrimitive(tx, frameId, name) {
   record(tx, { op: "primitive-dispatch", frame: frameId, name });
   if (name === "=") return primitiveCopy(tx, frameId);
-  if (name === "add_entity") return primitiveAddEntity(tx, frameId);
+  if (name === "add_entity") {
+    if (tx.capability) reject("ITERATOR_UNPROVEN_EFFECT");
+    return primitiveAddEntity(tx, frameId);
+  }
+  if (tx.profile !== EXEC_PROFILE_A2) reject("UNKNOWN_CONTROLLER");
+  if (name === "is_string") return primitivePredicateKind(tx, frameId, "string");
+  if (name === "is_null") return primitivePredicateKind(tx, frameId, "null");
+  if (name === "where") return primitiveWhere(tx, frameId);
+  if (name === "foreachobj") return primitiveForeach(tx, frameId);
+  if (name === "ALIAS") return primitiveAlias(tx, frameId);
+  if (name === "VIEW") return primitiveView(tx, frameId);
   reject("UNKNOWN_CONTROLLER");
 }
 
@@ -627,7 +1001,10 @@ function prepareBranchTerm(tx, frameId, sourceSlot) {
   const relation = readRelation(tx, sourceSlot);
   if (relation.target.sort === "N" && tx.state.mo.nodes.get(relation.target.id)?.kind === "string") {
     const name = projectValue(tx, relation.target);
-    return { kind: "primitive", name, reads: [] };
+    if (tx.profile === EXEC_PROFILE_A1) return { kind: "primitive", name, reads: [] };
+    // A2 EXEC keeps a bare string unresolved during C preparation. The common
+    // executeSlot dispatch resolves primitive/address semantics in the sibling H.
+    return { kind: "slot", slot: sourceSlot, reads: [] };
   }
   return { kind: "slot", slot: sourceSlot, reads: [] };
 }
@@ -638,7 +1015,8 @@ function executePreparedBranch(tx, frameId, prepared) {
 }
 
 function consumeExecutionFuel(tx, frameId, slot) {
-  if (!Number.isInteger(tx.executionFuel) || tx.executionFuel <= 0) {
+  const remaining = tx.executionBudget ? tx.executionBudget.remaining : tx.executionFuel;
+  if (!Number.isInteger(remaining) || remaining <= 0) {
     record(tx, {
       op: "execution-fuel",
       frame: frameId,
@@ -649,7 +1027,8 @@ function consumeExecutionFuel(tx, frameId, slot) {
     });
     reject("EXECUTION_FUEL_EXHAUSTED");
   }
-  tx.executionFuel -= 1;
+  if (tx.executionBudget) tx.executionBudget.remaining -= 1;
+  else tx.executionFuel -= 1;
 }
 
 function footprintFromTrace(trace, observedReads, preparedReads, baselineRelations) {
@@ -683,7 +1062,10 @@ function footprintFromTrace(trace, observedReads, preparedReads, baselineRelatio
         event.op === "lvalue-promote" ||
         event.op === "lvalue-promote-rebind" ||
         event.op === "host.add" ||
-        event.op === "host.load") {
+        event.op === "host.load" ||
+        event.op === "iterator-enter" ||
+        event.op === "view-enter" ||
+        event.op === "alias") {
       unproven = true;
     }
   }
@@ -745,12 +1127,30 @@ function executeLambdaObject(tx, frameId, modelSlot) {
   const branches = [...members.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   if (branches.length === 0) return;
 
+  const preparationTraceStart = tx.attemptedTrace.length;
   const plans = planLValues(tx, frameId, branches.map(([key]) => key));
   const prepared = branches.map(([, slot]) => {
     const start = tx.readDependencies.length;
     const term = prepareBranchTerm(tx, frameId, slot);
     return { ...term, reads: [...new Set([...term.reads, ...tx.readDependencies.slice(start)])] };
   });
+
+  // R2 requires explicit warmup outside a multi-H family. A1 C-preparation
+  // semantics (including shared local lvalue materialization) remain accepted,
+  // but A2 must not silently perform a cold global host load while preparing H.
+  if (tx.profile === EXEC_PROFILE_A2 && branches.length > 1) {
+    const preparationTrace = tx.attemptedTrace.slice(preparationTraceStart);
+    if (preparationTrace.some(event => event.op === "host.load")) {
+      record(tx, {
+        op: "H-preparation",
+        frame: frameId,
+        status: "REJECT",
+        diagnostic: "H_UNPROVEN_INTERFERENCE"
+      });
+      reject("H_UNPROVEN_INTERFERENCE");
+    }
+  }
+
   const destinations = new Set(plans.map(plan => plan.slot.id));
   for (const branch of prepared) {
     if (branch.reads.some(id => destinations.has(id))) reject("H_READ_WRITE_CONFLICT");
@@ -835,8 +1235,12 @@ function executeSlot(tx, frameId, slot) {
   }
   if (node.kind === "string") {
     const name = projectValue(tx, endpoint);
-    if (!ADMITTED_PRIMITIVES.has(name)) reject("UNKNOWN_CONTROLLER");
-    return dispatchPrimitive(tx, frameId, name);
+    const admitted = tx.profile === EXEC_PROFILE_A2 ? A2_ADMITTED_PRIMITIVES : A1_ADMITTED_PRIMITIVES;
+    if (admitted.has(name)) return dispatchPrimitive(tx, frameId, name);
+    if (tx.profile !== EXEC_PROFILE_A2) reject("UNKNOWN_CONTROLLER");
+    const resolved = resolveWithLoad(tx, frameId, name);
+    record(tx, { op: "exec-address", frame: frameId, address: name, slot: resolved.slot.id });
+    return executeSlot(tx, frameId, resolved.slot);
   }
   if (node.kind === "array") return executeVector(tx, frameId, endpoint);
 
@@ -849,6 +1253,10 @@ function executeSlot(tx, frameId, slot) {
 
   const { members } = objectMembers(tx, slot);
   if (members.has(ROLE_KEY.R)) return executeEntity(tx, frameId, slot);
+  if (tx.profile === EXEC_PROFILE_A2 && slot.id === PC2_A1_ROOT_SOURCE_SLOT &&
+      (members.has(ROLE_KEY.O) || members.has(ROLE_KEY.S))) {
+    reject("NO_CONTROLLER");
+  }
   return executeLambdaObject(tx, frameId, slot);
 }
 
@@ -927,6 +1335,60 @@ export function executePC2A1(session) {
       R: runtime.id,
       S: runtime.id
     }, null, "host-frame");
+
+    executeSlot(tx, hostFrame, P(PC2_A1_ROOT_SOURCE_SLOT));
+    assertCanonicalSourceRoot(tx);
+    const resultRelation = requireRelation(tx.state, runtime);
+    const result = projectPlainJSON(tx.state.mo, resultRelation.target);
+    const next = committedSession(tx);
+    return {
+      session: next,
+      result,
+      resultSlot: runtime,
+      hostFrame,
+      diagnostic: null,
+      attemptedTrace: tx.attemptedTrace,
+      committedTrace: tx.attemptedTrace.map(entry => cloneJSON(entry))
+    };
+  } catch (error) {
+    if (!error?.diagnostic) throw error;
+    return {
+      session,
+      result: null,
+      resultSlot: null,
+      hostFrame: null,
+      diagnostic: error.diagnostic,
+      attemptedTrace: tx.attemptedTrace,
+      committedTrace: []
+    };
+  }
+}
+
+export function executePC2A2(session, { entry } = {}) {
+  if (entry === undefined) return executePC2A1(session);
+  if (entry !== "EXEC") {
+    return {
+      session,
+      result: null,
+      resultSlot: null,
+      hostFrame: null,
+      diagnostic: "INVALID_EXECUTION_ENTRY",
+      attemptedTrace: [],
+      committedTrace: []
+    };
+  }
+
+  const tx = beginTransaction(session, { profile: EXEC_PROFILE_A2 });
+  try {
+    assertCanonicalSourceRoot(tx);
+    const initial = appendJSON(tx, null, "a2-run-result-null");
+    const runtime = createRuntimeSlot(tx, initial, "a2-run-result-slot");
+    const hostFrame = createFrameTx(tx, {
+      E: PC2_A1_ROOT_SOURCE_SLOT,
+      O: runtime.id,
+      R: runtime.id,
+      S: runtime.id
+    }, null, "a2-host-frame");
 
     executeSlot(tx, hostFrame, P(PC2_A1_ROOT_SOURCE_SLOT));
     assertCanonicalSourceRoot(tx);
