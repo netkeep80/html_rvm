@@ -1,6 +1,6 @@
 import { executePC2A2, snapshotPC2A1Session } from "../research/pc2/a1-contextual-json.mjs";
 import { cloneStrictJSON } from "../src/strict-json.js";
-import { N,P,Role,createMOState,executeMO,executeMOAtomically } from "../src/mo-core.js";
+import { N,P,Role,createMOState,executeMO,executeMOAtomically,sameEndpoint } from "../src/mo-core.js";
 import { subjectivateNaturalJSON, objectivateNaturalJSON, stepNaturalJSON, reflectiveReplaceRole, instantiateNaturalEntity } from "../research/pc1/j1-natural-json.mjs";
 import { serializeE1State,deserializeE1State,createE1State,validateE1State } from "../research/pc1/e1-witness.mjs";
 import {locateVPath,projectionOccurrences} from "./mo-projection-sync.js";
@@ -38,6 +38,21 @@ function initialPC2(program,registry){
  const anchor=program.state.mo.relations.get("j1:source-root");
  if(!sourceRoot||!anchor?.bound||anchor.target?.sort!==sourceRoot.sort||anchor.target?.id!==sourceRoot.id)throw Error("SOURCE_ROOT_INCOHERENT");
  return {state:program.state,sourceRoot,registry:new Map(Object.entries(cloneStrictJSON(registry))),namespace:new Map(),allocator:{N:1,P:1,F:1},host:{nextEntity:1}};
+}
+// A manual edit is a transaction over the adopted PC2 session, not just E1.
+ // The cached root duplets are host bindings; their descendants remain editable.
+function validatePC2Publication(session,previous=null){
+ const {state,sourceRoot,registry,namespace}=session;
+ const mo=state.mo,anchor=mo.relations.get("j1:source-root");
+ if(!mo.roots[0]||!anchor?.bound||!sameEndpoint(anchor.target,mo.roots[0])||!sameEndpoint(sourceRoot,mo.roots[0]))throw Error("SOURCE_ROOT_INCOHERENT");
+ for(const [name,id] of namespace){
+  const slot=mo.relations.get(id);
+  if(!registry.has(name)||!slot?.bound||!sameEndpoint(slot.owner,sourceRoot)||slot.label.kind!=="role"||slot.label.value!=="pc1:e1:duplet")throw Error("PC2_CACHE_SLOT_PROTECTED");
+  if(previous){
+   const old=previous.state.mo.relations.get(id);
+   if(!old?.bound||!sameEndpoint(old.owner,slot.owner)||!sameEndpoint(old.target,slot.target)||old.label.kind!==slot.label.kind||old.label.value!==slot.label.value)throw Error("PC2_CACHE_SLOT_PROTECTED");
+  }
+ }
 }
 function pc2Metrics(program,text,run,ms){
  const state=run.session.state;
@@ -219,12 +234,14 @@ export function createUnifiedSession(text = examples.where,{model=null,registry=
   const t=executeMOAtomically(applied.state.mo,actions);
   if(t.outcome.status!=="OK"){rejectAttempt("edit",t.outcome.diagnostic);return t}
   const state={...applied.state,mo:t.state};
-  try{validateE1State(state)}catch(e){rejectAttempt("edit",e.diagnostic??e.message);return {state:applied.state.mo,outcome:{status:"REJECT",diagnostic,semanticChange:false},trace:[]}}
-  publish({...applied,state});const edit={kind:"edit",actions,outcome:t.outcome,trace:t.trace};edits.push(edit);history.push(edit);return t;
+  try{validateE1State(state);publish({...applied,state})}catch(e){rejectAttempt("edit",e.diagnostic??e.message);return {state:applied.state.mo,outcome:{status:"REJECT",diagnostic,semanticChange:false},trace:[]}}
+  const edit={kind:"edit",actions,outcome:t.outcome,trace:t.trace};edits.push(edit);history.push(edit);return t;
  }
- function publish(program){let projection=null,error=null;
+ function publish(program,adopted=undefined){let projection=null,error=null;
+  const nextPC2=adopted===undefined?(pc2?{...pc2,state:program.state}:null):adopted;
+  if(nextPC2)validatePC2Publication(nextPC2,adopted===undefined?pc2:null);
   try{projection=JSON.stringify(objectivateNaturalJSON(program),null,2)}catch(e){error=e.diagnostic??e.message}
-  reset();applied=program;if(pc2)pc2={...pc2,state:program.state};draft=appliedText=projection;projectionDiagnostic=error;projectionPartial=true;
+  reset();applied=program;pc2=nextPC2;draft=appliedText=projection;projectionDiagnostic=error;projectionPartial=true;
  }
  function runPC2(){
   guard();if(!applied.state.mo.relations.has("j1:source-root"))throw Error("Natural JSON execution unavailable for this model");
@@ -239,7 +256,7 @@ export function createUnifiedSession(text = examples.where,{model=null,registry=
  }
  function adoptPC2(){
   guard();if(branch?.profile!=="PC2")throw Error("No committed PC2 branch");
-  const next=branch;pc2=next.pc2Session;publish(next.program);return applied;
+  const next=branch;publish(next.program,next.pc2Session);return applied;
  }
  function step(env){
   if(!attempt){guard();if(appliedText===null||!applied.state.mo.relations.has("j1:source-root"))throw Error("Natural JSON execution unavailable for this model");
@@ -266,7 +283,7 @@ export function createUnifiedSession(text = examples.where,{model=null,registry=
   discard(){if(attempt)throw Error("Stop execution before discarding draft");draft=appliedText;diagnostic=null},
   reset,step,run(env){while(!step(env)){}return branch},
   inspect(){guard();if(!this.executable)throw Error("No Natural JSON context");inspection=instantiateNaturalEntity(applied);branch=null;diagnostic=null;return inspection},
-  reflect(path,role,value){guard();const edited=reflectiveReplaceRole(applied,path,role,value);publish(edited.program);const edit={kind:"Q",trace:edited.trace,identity:edited.sourceSlot};edits.push(edit);history.push(edit);return edited},
+  reflect(path,role,value){guard();const edited=reflectiveReplaceRole(applied,path,role,value);try{publish(edited.program)}catch(e){rejectAttempt("edit",e.diagnostic??e.message);throw e}const edit={kind:"Q",trace:edited.trace,identity:edited.sourceSlot};edits.push(edit);history.push(edit);return edited},
   endpoint(id,side,target){
    if(side!=="B"&&side!=="E")throw Error("Invalid endpoint side");
    return semanticActions([side==="B"?{op:"moveRelation",id,owner:target}:{op:"rebindRelation",id,target}]);

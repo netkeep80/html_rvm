@@ -69,7 +69,7 @@ function render(){
  $("step").disabled=profile==="PC2"||$("run").disabled;
  $("execution-profile").disabled=session.running||!!viewRun;
  $("adopt-pc2").disabled=!!viewRun||session.dirty||session.branch?.profile!=="PC2";
- $("pc2-note").textContent=profile==="PC2"?"EXEC · Run атомарен; события показывают итоговое состояние, не Step. Принять результат — сохранить МО и исполнительную сессию.":"J1 · реальные Step; where сохраняет выбранную идентичность.";
+ $("pc2-note").textContent=profile==="PC2"?"EXEC · where → COPY. Run атомарен; события показывают итоговое состояние, не Step. Принять результат — сохранить МО и исполнительную сессию. Корневые отношения кэша защищены от ручного изменения.":"J1 · реальные Step; where → ALIAS (сохраняет выбранную идентичность).";
  $("pc2-metrics").textContent=ownerRun?.metrics?json(ownerRun.metrics):"—";
  $("inspect").disabled=profile==="PC2"||session.running||session.dirty||!session.executable||!!viewRun;
  let predicate=false;try{const c=inspectNaturalEntity(session.applied,["$sub"]).controller;predicate=c==="is_string"||c==="is_null"}catch{}

@@ -237,3 +237,49 @@ test("PC2 Studio adoption carries host registry and allocator, reset and rejecti
  assert.equal(s.runPC2().result,"pc2-ent-2");s.reset();
  s.edit('{"$obj":{"v":7},"$rel":"add_entity"}');assert.equal(s.apply(),true);assert.equal(s.pc2Snapshot,null);assert.equal(s.runPC2().result,"pc2-ent-1");
 });
+
+function cachedFragment(){
+ const s=createUnifiedSession(examples["PC2 PrepareFullReport fragment"],{registry:{"#":{eq_entity_name:"=",note:1}}});
+ const run=s.runPC2();assert.ok(run);s.adoptPC2();
+ const id=run.pc2Session.namespace.get("#");assert.ok(id);
+ return {s,id,slot:s.applied.state.mo.relations.get(id)};
+}
+test("PC2 Studio cache root deletion, unbinding, redirection, owner and label edits are atomic rejects",()=>{
+ const {s,id,slot}=cachedFragment();
+ const before=s.pc2Snapshot,program=s.applied,source=s.appliedText,history=s.history,edits=s.edits,runs=s.runs;
+ const root=s.applied.state.mo.roots[0];
+ for(const edit of [
+  ()=>s.remove({sort:"P",id}),
+  ()=>s.atomic([{op:"rebindRelation",id,target:null}]),
+  ()=>s.endpoint(id,"E",root),
+  ()=>s.endpoint(id,"B",slot.target),
+  ()=>s.atomic([{op:"relabelRelation",id,label:{kind:"role",value:"other"}}]),
+  ()=>s.atomic([{op:"createNode",id:"test:rejected",kind:"number",payload:7},{op:"deleteRelation",id}])
+ ]){
+  const t=edit();assert.equal(t.outcome.status,"REJECT");assert.equal(t.outcome.diagnostic,"PC2_CACHE_SLOT_PROTECTED");assert.equal(t.outcome.semanticChange,false);assert.deepEqual(t.trace,[]);
+  assert.equal(t.state,program.state.mo);assert.equal(s.applied,program);assert.equal(s.pc2Snapshot,before);assert.equal(s.appliedText,source);assert.equal(s.draft,source);
+  assert.deepEqual(s.history,history);assert.deepEqual(s.edits,edits);assert.deepEqual(s.runs,runs);
+ }
+ const again=s.runPC2();assert.ok(again);assert.deepEqual(again.result,["$$obj/FileName","$$obj/param11/meas_count"]);
+ assert.ok(again.trace.some(e=>e.op==="host.cache-hit"&&e.name==="#"&&e.slot===id));assert.ok(!again.trace.some(e=>e.op==="host.load"&&e.name==="#"));
+});
+test("PC2 Studio legal cache descendant edit preserves bindings and host structures",()=>{
+ const {s,id,slot}=cachedFragment();
+ const before=JSON.parse(s.pc2Snapshot);
+ const member=[...s.applied.state.mo.relations.values()].find(r=>r.owner.id===slot.target.id&&r.owner.sort===slot.target.sort&&r.label.kind==="key"&&r.label.value==="note");
+ assert.ok(member);const t=s.atomic([{op:"setNode",id:member.target.id,kind:"number",payload:2}]);assert.equal(t.outcome.status,"OK");
+ const after=JSON.parse(s.pc2Snapshot);
+ for(const k of ["registry","namespace","sourceRoot","allocator","host"])assert.deepEqual(after[k],before[k]);
+ assert.equal(s.applied.state.mo.nodes.get(member.target.id).payload,2);
+ const again=s.runPC2();assert.ok(again);assert.ok(again.trace.some(e=>e.op==="host.cache-hit"&&e.slot===id));assert.equal(again.session.state.mo.nodes.get(member.target.id).payload,2);
+});
+test("PC2 Studio adopted source reflection remains executable and retains source controller identity",()=>{
+ const s=createUnifiedSession(examples["PC2 filter / patch / filter"]);s.runPC2();s.adoptPC2();
+ const before=JSON.parse(s.pc2Snapshot);
+ const e=s.reflect(["filter","$sub"],"R","is_string");
+ const after=JSON.parse(s.pc2Snapshot);
+ for(const k of ["registry","namespace","sourceRoot","allocator","host"])assert.deepEqual(after[k],before[k]);
+ assert.equal(JSON.parse(s.appliedText).filter.$sub.$rel,"is_string");
+ const run=s.runPC2();assert.ok(run);assert.deepEqual(run.trace.filter(e=>e.op==="iterator-exit").map(e=>e.result),[["4"],[null]]);
+ assert.ok(run.session.state.mo.relations.has(e.sourceSlot.id));
+});

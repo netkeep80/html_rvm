@@ -193,6 +193,18 @@ try{
  await shot("07-pc2-reflection","header");
  await set("example","PC2 PrepareFullReport fragment","change");await clickId("run");
  check(await evalv("JSON.stringify(JSON.parse(document.getElementById('result').textContent))===JSON.stringify(['$$obj/FileName','$$obj/param11/meas_count'])"),"historical two-column fragment");
+ // Identify the real loaded namespace slot from the committed trace, not a fixed ID.
+ const loadButton=await evalv("Array.from(document.querySelectorAll('[data-pc2-event]')).find(b=>b.textContent.endsWith('host.load')).dataset.pc2Event");
+ await clickPoint(await pos('[data-pc2-event="'+loadButton+'"]'));
+ const cacheSlot=await evalv("JSON.parse(document.getElementById('transition-detail').textContent).event.slot");
+ await clickId("adopt-pc2");const cacheBefore=await exact(),cacheSource=await evalv("document.getElementById('source').value");
+ await evalv("document.getElementById('advanced-actions').closest('details').open=true;true");
+ await set("advanced-actions",JSON.stringify([{op:"deleteRelation",id:cacheSlot}]));await clickId("advanced-apply");
+ check((await exact())===cacheBefore&&await evalv("document.getElementById('last-reject').textContent.includes('PC2_CACHE_SLOT_PROTECTED')"),"PC2 adopted cache deletion rejected by real R0 editor");
+ check((await evalv("document.getElementById('source').value"))===cacheSource,"PC2 rejected edit preserves source");
+ await clickId("run");
+ check(await evalv("JSON.stringify(JSON.parse(document.getElementById('result').textContent))===JSON.stringify(['$$obj/FileName','$$obj/param11/meas_count'])&&Array.from(document.querySelectorAll('[data-pc2-event]')).some(b=>b.textContent.endsWith('host.cache-hit'))"),"PC2 rerun after editor reject uses cached namespace");
+ await shot("08-pc2-cache-reject","header");
  await set("example","PC2 rollback","change");const pc2RejectBefore=await exact();await clickId("run");
  check((await exact())===pc2RejectBefore&&await evalv("document.getElementById('last-reject').textContent.includes('ITERATOR_FOREIGN_WRITE')&&document.querySelector('[data-pc2-event]').textContent.startsWith('ATTEMPT')"),"PC2 atomic reject with attempted trace");
  await set("example","PC2 COPY","change");await clickId("run");check(await evalv("JSON.parse(document.getElementById('result').textContent).result.x===1"),"PC2 COPY");
